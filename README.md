@@ -16,7 +16,3 @@ A Flask API exposes endpoints for:
 - GET /nodes/resolve: Resolving conflicts in the blockchain.
 
 These endpoints allow for peer-to-peer communication and network synchronization.
-
-
-#### Running code
-run startnodes batch file and 
