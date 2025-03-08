@@ -1,12 +1,11 @@
 import hashlib
 import json
-from time import time
-from uuid import uuid4
-from flask import Flask, jsonify, request
-import requests
-from urllib.parse import urlparse
+import socket
 import threading
-import time as ttime
+from time import time, sleep
+from uuid import uuid4
+from urllib.parse import urlparse
+import argparse
 
 # -----------------------------
 # Blockchain and Block Classes
@@ -16,28 +15,24 @@ class Blockchain:
         self.chain = []
         self.current_transactions = []
         self.nodes = set()
-        
         # Create the genesis block (first block)
         self.new_block(previous_hash='1', nonce=100)
 
     def register_node(self, address):
         """
         Add a new node to the list of nodes.
-        :param address: Address of node. Eg. 'http://192.168.0.5:5000'
+        :param address: Address of node, e.g., "127.0.0.1:5001"
         """
-        parsed_url = urlparse(address)
-        if parsed_url.netloc:
-            self.nodes.add(parsed_url.scheme + "://" + parsed_url.netloc)
-        elif parsed_url.path:
-            self.nodes.add(parsed_url.path)
-        else:
-            raise ValueError("Invalid URL")
-    
+        # Expect address in "host:port" format.
+        if ":" not in address:
+            raise ValueError("Address must be in host:port format")
+        self.nodes.add(address)
+
     def valid_chain(self, chain):
         """
         Determine if a given blockchain is valid.
         :param chain: A blockchain (list of blocks)
-        :return: True if valid, False if not
+        :return: True if valid, False otherwise.
         """
         last_block = chain[0]
         current_index = 1
@@ -61,33 +56,27 @@ class Blockchain:
         """
         Consensus Algorithm:
         This resolves conflicts by replacing our chain with the longest one in the network.
-        :return: True if our chain was replaced, False if not
+        It contacts each peer using our custom TCP protocol.
+        :return: True if our chain was replaced, False if not.
         """
         neighbours = self.nodes
         new_chain = None
-        
-        # Look for chains longer than ours.
         max_length = len(self.chain)
         
-        # Grab and verify the chains from all the nodes in our network.
         for node in neighbours:
-            try:
-                response = requests.get(f'{node}/chain')
-                if response.status_code == 200:
-                    length = response.json()['length']
-                    chain = response.json()['chain']
-                    
-                    if length > max_length and self.valid_chain(chain):
-                        max_length = length
-                        new_chain = chain
-            except Exception as e:
-                print(f"Could not connect to node {node}: {e}")
+            response = send_message(node, {"type": "GET_CHAIN"}, expect_response=True)
+            if response and response.get("type") == "CHAIN":
+                chain = response.get("chain")
+                if chain and len(chain) > max_length and self.valid_chain(chain):
+                    max_length = len(chain)
+                    new_chain = chain
         
-        # Replace our chain if we discovered a new, valid chain longer than ours.
         if new_chain:
             self.chain = new_chain
+            print("Our chain was replaced by a longer valid chain from peers.")
             return True
         
+        print("Our chain is authoritative.")
         return False
 
     def new_block(self, nonce, previous_hash=None):
@@ -132,6 +121,7 @@ class Blockchain:
         """
         Creates a SHA-256 hash of a Block.
         :param block: Block.
+        :return: The hash string.
         """
         block_string = json.dumps(block, sort_keys=True).encode()
         return hashlib.sha256(block_string).hexdigest()
@@ -169,171 +159,223 @@ class Blockchain:
         return guess_hash[:4] == "0000"
 
 # -----------------------------
-# Instantiate the Node and Flask App
+# Peer-to-Peer Networking (Sockets)
 # -----------------------------
-app = Flask(__name__)
-
-# Generate a globally unique address for this node.
-node_identifier = str(uuid4()).replace('-', '')
-
-# Instantiate the Blockchain.
-blockchain = Blockchain()
-
-# -----------------------------
-# API Endpoints
-# -----------------------------
-@app.route('/mine', methods=['GET'])
-def mine():
+def send_message(peer_address, message, expect_response=False):
     """
-    Mine a new block by:
-      1. Calculating the Proof of Work.
-      2. Rewarding the miner with a new transaction.
-      3. Creating a new Block and adding it to the chain.
+    Send a JSON message to a peer over TCP.
+    :param peer_address: string "host:port"
+    :param message: dict to send.
+    :param expect_response: If True, wait for and return a JSON response.
+    :return: The response as a dict if expect_response is True, else None.
     """
-    last_block = blockchain.last_block
-    last_nonce = last_block['nonce']
-    nonce = blockchain.proof_of_work(last_nonce)
+    try:
+        host, port_str = peer_address.split(":")
+        port = int(port_str)
+        with socket.create_connection((host, port), timeout=5) as s:
+            s.sendall((json.dumps(message) + "\n").encode())
+            if expect_response:
+                # Use a file-like object to read a full line
+                file = s.makefile()
+                response_line = file.readline()
+                if response_line:
+                    return json.loads(response_line)
+    except Exception as e:
+        print(f"Error sending message to {peer_address}: {e}")
+    return None
 
-    # Reward the miner (sender "0" means that this node has mined a new coin)
-    blockchain.new_transaction(
-        sender="0",
-        recipient=node_identifier,
-        amount=1,
-    )
-
-    previous_hash = blockchain.hash(last_block)
-    block = blockchain.new_block(nonce, previous_hash)
-
-    response = {
-        'message': "New Block Forged",
-        'index': block['index'],
-        'transactions': block['transactions'],
-        'nonce': block['nonce'],
-        'previous_hash': block['previous_hash'],
-    }
-    return jsonify(response), 200
-
-@app.route('/transactions/new', methods=['POST'])
-def new_transaction():
+def handle_client_connection(conn, addr, blockchain, node_identifier):
     """
-    Create a new transaction.
-    Expects JSON with 'sender', 'recipient', and 'amount'.
+    Handle incoming connections from peers.
+    The protocol expects one JSON message (terminated by newline) per connection.
     """
-    values = request.get_json()
-
-    required = ['sender', 'recipient', 'amount']
-    if not values or not all(k in values for k in required):
-        return 'Missing values', 400
-
-    index = blockchain.new_transaction(values['sender'], values['recipient'], values['amount'])
-
-    response = {'message': f'Transaction will be added to Block {index}'}
-    return jsonify(response), 201
-
-@app.route('/chain', methods=['GET'])
-def full_chain():
-    """
-    Return the full blockchain.
-    """
-    response = {
-        'chain': blockchain.chain,
-        'length': len(blockchain.chain),
-    }
-    return jsonify(response), 200
-
-@app.route('/nodes/list', methods=['GET'])
-def list_nodes():
-    """
-    Endpoint to list all known nodes.
-    """
-    response = {
-        'nodes': [f'http://{node}' for node in blockchain.nodes]
-    }
-    return jsonify(response), 200
-
-
-@app.route('/nodes/register', methods=['POST'])
-def register_nodes():
-    """
-    Register a list of new nodes. Expects a JSON payload with a list of nodes.
-    """
-    values = request.get_json()
-    nodes = values.get('nodes')
-    if nodes is None:
-        return "Error: Please supply a valid list of nodes", 400
-
-    for node in nodes:
-        blockchain.register_node(node)
-
-    response = {
-        'message': 'New nodes have been added',
-        'total_nodes': list(blockchain.nodes),
-    }
-    return jsonify(response), 201
-
-@app.route('/nodes/resolve', methods=['GET'])
-def consensus():
-    """
-    Resolve conflicts across nodes by replacing our chain with the longest one in the network.
-    """
-    replaced = blockchain.resolve_conflicts()
-
-    if replaced:
-        response = {
-            'message': 'Our chain was replaced',
-            'new_chain': blockchain.chain
-        }
-    else:
-        response = {
-            'message': 'Our chain is authoritative',
-            'chain': blockchain.chain
-        }
-    return jsonify(response), 200
-
-# -----------------------------
-# Auto-Register Peers on Startup
-# -----------------------------
-def auto_register_peers(my_address, peers):
-    """
-    Automatically registers this node with a list of peer nodes.
-    It sends a POST request to each peer's /nodes/register endpoint.
-    """
-    # Wait briefly to ensure the server is running.
-    ttime.sleep(1)
-    for peer in peers:
-        try:
-            url = f"{peer}/nodes/register"
-            payload = {"nodes": [my_address]}
-            response = requests.post(url, json=payload)
-            if response.status_code == 201:
-                print(f"Successfully registered with peer: {peer}")
+    try:
+        file = conn.makefile(mode="rwb")
+        line = file.readline()
+        if not line:
+            return
+        message = json.loads(line.decode())
+        msg_type = message.get("type")
+        response = {}
+        if msg_type == "GET_CHAIN":
+            response = {"type": "CHAIN", "chain": blockchain.chain}
+        elif msg_type == "REGISTER_NODE":
+            new_node = message.get("node")
+            if new_node:
+                try:
+                    blockchain.register_node(new_node)
+                    response = {"status": "OK", "message": f"Node {new_node} registered."}
+                except ValueError as e:
+                    response = {"status": "Error", "message": str(e)}
             else:
-                print(f"Failed to register with peer: {peer}, response: {response.text}")
-            # Also add the peer to our own node list
-            blockchain.register_node(peer)
-        except Exception as e:
-            print(f"Error registering with peer {peer}: {e}")
+                response = {"status": "Error", "message": "No node provided."}
+        elif msg_type == "NEW_TRANSACTION":
+            sender = message.get("sender")
+            recipient = message.get("recipient")
+            amount = message.get("amount")
+            if sender and recipient and amount is not None:
+                index = blockchain.new_transaction(sender, recipient, amount)
+                response = {"status": "OK", "message": f"Transaction will be added to Block {index}"}
+            else:
+                response = {"status": "Error", "message": "Missing transaction fields."}
+        elif msg_type == "NEW_BLOCK":
+            block = message.get("block")
+            if block:
+                last_block = blockchain.last_block
+                # Basic validation: block index and previous_hash must match.
+                if block.get("index") == last_block["index"] + 1 and block.get("previous_hash") == blockchain.hash(last_block):
+                    blockchain.chain.append(block)
+                    # (Optionally, remove transactions that appear in the block from current_transactions.)
+                    response = {"status": "OK", "message": "Block accepted."}
+                else:
+                    response = {"status": "Error", "message": "Invalid block."}
+            else:
+                response = {"status": "Error", "message": "No block provided."}
+        else:
+            response = {"status": "Error", "message": "Unknown message type."}
+        file.write((json.dumps(response) + "\n").encode())
+        file.flush()
+    except Exception as e:
+        print(f"Error handling connection from {addr}: {e}")
+    finally:
+        conn.close()
+
+def run_server(host, port, blockchain, node_identifier):
+    """
+    Runs a TCP server that listens for incoming peer connections.
+    """
+    server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    server.bind((host, port))
+    server.listen(5)
+    print(f"Listening for peers on {host}:{port}")
+    while True:
+        conn, addr = server.accept()
+        threading.Thread(target=handle_client_connection, args=(conn, addr, blockchain, node_identifier), daemon=True).start()
+
+def broadcast_message(blockchain, message):
+    """
+    Broadcast a message to all known peer nodes.
+    """
+    for node in blockchain.nodes:
+        send_message(node, message)
 
 # -----------------------------
-# Running the Node
+# Command-line Interface for Blockchain
 # -----------------------------
-if __name__ == '__main__':
-    from argparse import ArgumentParser
+def print_menu():
+    print("\nBlockchain Menu:")
+    print("1. Mine a new block")
+    print("2. Create a new transaction")
+    print("3. Show blockchain")
+    print("4. Register a new node")
+    print("5. Resolve conflicts (synchronize chain with peers)")
+    print("6. Exit")
 
-    parser = ArgumentParser()
-    parser.add_argument('-p', '--port', default=5000, type=int, help='port to listen on')
-    parser.add_argument('--host', default="127.0.0.1", help='host address of the node')
-    parser.add_argument('--peers', default="", help='Comma-separated list of peer node URLs (e.g., "http://127.0.0.1:5001,http://127.0.0.1:5002")')
+def main():
+    parser = argparse.ArgumentParser(description="Simple P2P Blockchain Node (pure Python)")
+    parser.add_argument('--host', default="127.0.0.1", help='Host address of this node')
+    parser.add_argument('-p', '--port', default=5000, type=int, help='Port to listen on')
+    parser.add_argument('--peers', default="", help='Comma-separated list of peer addresses in host:port format')
     args = parser.parse_args()
 
-    port = args.port
-    my_address = f"http://{args.host}:{port}"
+    node_identifier = str(uuid4()).replace('-', '')
+    blockchain = Blockchain()
 
-    # If peers are provided, start a background thread to auto-register with them.
+    # If peers were provided on the command line, register them locally and tell them about us.
     if args.peers:
-        peer_list = [peer.strip() for peer in args.peers.split(',') if peer.strip()]
-        thread = threading.Thread(target=auto_register_peers, args=(my_address, peer_list))
-        thread.start()
+        for peer in args.peers.split(','):
+            peer = peer.strip()
+            if peer:
+                try:
+                    blockchain.register_node(peer)
+                    # Inform the peer about this node
+                    response = send_message(peer, {"type": "REGISTER_NODE", "node": f"{args.host}:{args.port}"}, expect_response=True)
+                    if response and response.get("status") == "OK":
+                        print(f"Registered with peer {peer}: {response.get('message')}")
+                    else:
+                        print(f"Could not register with peer {peer}.")
+                except Exception as e:
+                    print(f"Error registering with peer {peer}: {e}")
 
-    print(f"Starting node at {my_address}")
-    app.run(host=args.host, port=port)
+    # Start the server thread to listen for incoming peer messages.
+    server_thread = threading.Thread(target=run_server, args=(args.host, args.port, blockchain, node_identifier), daemon=True)
+    server_thread.start()
+    
+    sleep(1)  # Brief pause to ensure the server is up before showing the menu.
+
+    while True:
+        print_menu()
+        choice = input("Enter your choice (1-6): ").strip()
+        
+        if choice == '1':
+            print("Mining a new block...")
+            last_block = blockchain.last_block
+            last_nonce = last_block['nonce']
+            nonce = blockchain.proof_of_work(last_nonce)
+            
+            # Reward the miner (sender "0" means that this node mined a new coin)
+            blockchain.new_transaction(
+                sender="0",
+                recipient=node_identifier,
+                amount=1,
+            )
+            
+            previous_hash = blockchain.hash(last_block)
+            block = blockchain.new_block(nonce, previous_hash)
+            print("New Block Forged:")
+            print(json.dumps(block, indent=4))
+            # Broadcast the new block to peers.
+            broadcast_message(blockchain, {"type": "NEW_BLOCK", "block": block})
+            
+        elif choice == '2':
+            print("Create a new transaction:")
+            sender = input("Sender: ").strip()
+            recipient = input("Recipient: ").strip()
+            amount_input = input("Amount: ").strip()
+            try:
+                amount = float(amount_input)
+            except ValueError:
+                print("Invalid amount. Please enter a number.")
+                continue
+            index = blockchain.new_transaction(sender, recipient, amount)
+            print(f"Transaction will be added to Block {index}")
+            # Optionally broadcast the new transaction to peers.
+            broadcast_message(blockchain, {
+                "type": "NEW_TRANSACTION",
+                "sender": sender,
+                "recipient": recipient,
+                "amount": amount
+            })
+            
+        elif choice == '3':
+            print("Full Blockchain:")
+            print(json.dumps(blockchain.chain, indent=4))
+            
+        elif choice == '4':
+            address = input("Enter node address (host:port): ").strip()
+            try:
+                blockchain.register_node(address)
+                print("Node registered locally!")
+                # Inform the new node about us.
+                response = send_message(address, {"type": "REGISTER_NODE", "node": f"{args.host}:{args.port}"}, expect_response=True)
+                if response:
+                    print(f"Response from {address}: {response.get('message')}")
+            except ValueError as e:
+                print(f"Error: {e}")
+            
+        elif choice == '5':
+            print("Resolving conflicts by querying peers...")
+            replaced = blockchain.resolve_conflicts()
+            if replaced:
+                print("Our chain was replaced by a longer valid chain.")
+            else:
+                print("Our chain remains authoritative.")
+                
+        elif choice == '6':
+            print("Exiting...")
+            break
+        else:
+            print("Invalid choice. Please choose a valid option.")
+
+if __name__ == '__main__':
+    main()
