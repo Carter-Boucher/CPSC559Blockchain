@@ -25,6 +25,12 @@ class BlockchainGUI:
         header_frame.pack(side=tk.TOP, fill=tk.X)
         header_label = ttk.Label(header_frame, text=f"Blockchain Node Interface - {ip}:{args.port}", font=("Helvetica", 16))
         header_label.pack(side=tk.LEFT)
+        
+        # Leader Status Label
+        self.leader_var = tk.StringVar()
+        self.leader_var.set("Leader: Unknown")
+        leader_label = ttk.Label(header_frame, textvariable=self.leader_var, font=("Helvetica", 12))
+        leader_label.pack(side=tk.RIGHT)
 
         # Main Notebook for Tabs
         notebook = ttk.Notebook(root)
@@ -122,6 +128,16 @@ class BlockchainGUI:
         self.refresh_nodes()
         self.refresh_ledger()
         self.log("Interface initialized.")
+
+        # Start periodic update of leader status.
+        self.update_leader_status()
+
+    def update_leader_status(self):
+        # Update the leader status every 5 seconds.
+        current_leader = self.blockchain.current_leader if self.blockchain.current_leader is not None else "Unknown"
+        self.leader_var.set(f"Leader: {current_leader}")
+        self.root.after(5000, self.update_leader_status)
+        # print(f"Leader: {current_leader}")
 
     def log(self, message):
         self.log_text.insert(tk.END, message + "\n")

@@ -2,7 +2,6 @@ import argparse
 import json
 import threading
 from time import sleep
-from uuid import uuid4
 import tkinter as tk
 import logging
 
@@ -32,9 +31,9 @@ def main():
     )
     args = parser.parse_args()
 
-    # Generate a unique identifier for this node.
-    node_identifier = str(uuid4()).replace('-', '')
-    blockchain = Blockchain()
+    # For leader election purposes, use the port as the node's numeric ID.
+    node_identifier = args.port
+    blockchain = Blockchain(node_id=node_identifier)
 
     # If peer addresses are provided, attempt to register with each one.
     if args.peers:
@@ -44,7 +43,6 @@ def main():
                 try:
                     blockchain.register_node(peer)
                     logging.info(f"Attempting to register with peer {peer}...")
-                    # Send a registration message to the peer.
                     response = send_message(
                         peer,
                         {"type": "REGISTER_NODE", "node": f"{args.host}:{args.port}"},
@@ -55,7 +53,6 @@ def main():
                     else:
                         logging.warning(f"Could not register with peer {peer}. Response: {response}")
 
-                    # Request pending transactions from the peer.
                     pending_response = send_message(
                         peer,
                         {"type": "GET_PENDING"},
