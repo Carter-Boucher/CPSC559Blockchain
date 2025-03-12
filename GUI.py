@@ -14,7 +14,7 @@ class BlockchainGUI:
         self.node_identifier = node_identifier
         self.args = args
 
-        ip = socket.gethostbyname(socket.gethostname())
+        ip = args.host
         root.title(f"Blockchain Node: {ip}:{args.port}")
 
         style = ttk.Style()
