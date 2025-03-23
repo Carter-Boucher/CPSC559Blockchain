@@ -1,0 +1,611 @@
+{
+    "127.0.0.1:5000": {
+        "node_id": 5000,
+        "chain": [
+            {
+                "index": 1,
+                "timestamp": 1234567890,
+                "transactions": [],
+                "nonce": 100,
+                "previous_hash": "1",
+                "difficulty": 4
+            },
+            {
+                "index": 2,
+                "timestamp": 1742770531.9652762,
+                "transactions": [
+                    {
+                        "sender": "127.0.0.1:5000",
+                        "recipient": "127.0.0.1:5002",
+                        "amount": 28.23,
+                        "status": "success"
+                    },
+                    {
+                        "sender": "127.0.0.1:5002",
+                        "recipient": "127.0.0.1:5000",
+                        "amount": 67.99,
+                        "status": "success"
+                    }
+                ],
+                "nonce": 152998,
+                "previous_hash": "86e8ad073858fb6f96b221fe42b2a977a81f84e7b7a14fa3d991e5a08a159043",
+                "difficulty": 4
+            },
+            {
+                "index": 3,
+                "timestamp": 1742770532.1177375,
+                "transactions": [
+                    {
+                        "sender": "127.0.0.1:5001",
+                        "recipient": "127.0.0.1:5000",
+                        "amount": 3.95,
+                        "status": "success"
+                    },
+                    {
+                        "sender": "127.0.0.1:5002",
+                        "recipient": "127.0.0.1:5000",
+                        "amount": 56.56,
+                        "status": "success"
+                    },
+                    {
+                        "sender": "127.0.0.1:5002",
+                        "recipient": "127.0.0.1:5001",
+                        "amount": 22.82,
+                        "status": "success"
+                    },
+                    {
+                        "sender": "127.0.0.1:5000",
+                        "recipient": "127.0.0.1:5002",
+                        "amount": 42.84,
+                        "status": "success"
+                    },
+                    {
+                        "sender": "127.0.0.1:5000",
+                        "recipient": "127.0.0.1:5001",
+                        "amount": 11.12,
+                        "status": "success"
+                    },
+                    {
+                        "sender": "127.0.0.1:5001",
+                        "recipient": "127.0.0.1:5002",
+                        "amount": 27.19,
+                        "status": "success"
+                    },
+                    {
+                        "sender": "127.0.0.1:5001",
+                        "recipient": "127.0.0.1:5002",
+                        "amount": 13.36,
+                        "status": "success"
+                    },
+                    {
+                        "sender": "127.0.0.1:5001",
+                        "recipient": "127.0.0.1:5002",
+                        "amount": 62.23,
+                        "status": "success"
+                    }
+                ],
+                "nonce": 29171,
+                "previous_hash": "fe1b376d1aa00984774576e021436cf56eb038722966cf0ffc851b6554462bf6",
+                "difficulty": 4
+            },
+            {
+                "index": 4,
+                "timestamp": 1742770533.4854088,
+                "transactions": [
+                    {
+                        "sender": "127.0.0.1:5002",
+                        "recipient": "127.0.0.1:5000",
+                        "amount": 5.54,
+                        "status": "success"
+                    },
+                    {
+                        "sender": "127.0.0.1:5001",
+                        "recipient": "127.0.0.1:5000",
+                        "amount": 85.68,
+                        "status": "success"
+                    }
+                ],
+                "nonce": 931906,
+                "previous_hash": "48b8b377e07f7d2f46c32da3631554290f36db4a8978d341ef61cf35b549807c",
+                "difficulty": 5
+            },
+            {
+                "index": 5,
+                "timestamp": 1742770545.1436188,
+                "transactions": [
+                    {
+                        "sender": "127.0.0.1:5001",
+                        "recipient": "127.0.0.1:5002",
+                        "amount": 83.58,
+                        "status": "success"
+                    },
+                    {
+                        "sender": "127.0.0.1:5001",
+                        "recipient": "127.0.0.1:5000",
+                        "amount": 67.35,
+                        "status": "success"
+                    },
+                    {
+                        "sender": "127.0.0.1:5002",
+                        "recipient": "127.0.0.1:5000",
+                        "amount": 61.3,
+                        "status": "success"
+                    },
+                    {
+                        "sender": "127.0.0.1:5002",
+                        "recipient": "127.0.0.1:5000",
+                        "amount": 17.18,
+                        "status": "success"
+                    },
+                    {
+                        "sender": "127.0.0.1:5002",
+                        "recipient": "127.0.0.1:5000",
+                        "amount": 68.78,
+                        "status": "success"
+                    }
+                ],
+                "nonce": 8579906,
+                "previous_hash": "834ddb9640c2133e60848c8e2cd0ae32725510fd7f035c2dd33b61e585825ebc",
+                "difficulty": 6
+            },
+            {
+                "index": 6,
+                "timestamp": 1742770574.0033674,
+                "transactions": [
+                    {
+                        "sender": "127.0.0.1:5000",
+                        "recipient": "127.0.0.1:5001",
+                        "amount": 40.72,
+                        "status": "success"
+                    },
+                    {
+                        "sender": "127.0.0.1:5002",
+                        "recipient": "127.0.0.1:5001",
+                        "amount": 22.05,
+                        "status": "success"
+                    },
+                    {
+                        "sender": "127.0.0.1:5002",
+                        "recipient": "127.0.0.1:5001",
+                        "amount": 15.14,
+                        "status": "success"
+                    },
+                    {
+                        "sender": "127.0.0.1:5002",
+                        "recipient": "127.0.0.1:5001",
+                        "amount": 74.95,
+                        "status": "success"
+                    },
+                    {
+                        "sender": "127.0.0.1:5002",
+                        "recipient": "127.0.0.1:5001",
+                        "amount": 36.84,
+                        "status": "success"
+                    },
+                    {
+                        "sender": "127.0.0.1:5001",
+                        "recipient": "127.0.0.1:5000",
+                        "amount": 75.82,
+                        "status": "success"
+                    }
+                ],
+                "nonce": 21754899,
+                "previous_hash": "31862f777feecad04a54c77eb8d7bc803ed102f20656faf720c890a3130685bf",
+                "difficulty": 6
+            }
+        ],
+        "pending_transactions": [],
+        "nodes": [
+            "127.0.0.1:5002",
+            "127.0.0.1:5000",
+            "127.0.0.1:5001"
+        ],
+        "difficulty": 5
+    },
+    "127.0.0.1:5001": {
+        "node_id": 5001,
+        "chain": [
+            {
+                "index": 1,
+                "timestamp": 1234567890,
+                "transactions": [],
+                "nonce": 100,
+                "previous_hash": "1",
+                "difficulty": 4
+            },
+            {
+                "index": 2,
+                "timestamp": 1742770531.9652762,
+                "transactions": [
+                    {
+                        "sender": "127.0.0.1:5000",
+                        "recipient": "127.0.0.1:5002",
+                        "amount": 28.23,
+                        "status": "success"
+                    },
+                    {
+                        "sender": "127.0.0.1:5002",
+                        "recipient": "127.0.0.1:5000",
+                        "amount": 67.99,
+                        "status": "success"
+                    }
+                ],
+                "nonce": 152998,
+                "previous_hash": "86e8ad073858fb6f96b221fe42b2a977a81f84e7b7a14fa3d991e5a08a159043",
+                "difficulty": 4
+            },
+            {
+                "index": 3,
+                "timestamp": 1742770532.1177375,
+                "transactions": [
+                    {
+                        "sender": "127.0.0.1:5001",
+                        "recipient": "127.0.0.1:5000",
+                        "amount": 3.95,
+                        "status": "success"
+                    },
+                    {
+                        "sender": "127.0.0.1:5002",
+                        "recipient": "127.0.0.1:5000",
+                        "amount": 56.56,
+                        "status": "success"
+                    },
+                    {
+                        "sender": "127.0.0.1:5002",
+                        "recipient": "127.0.0.1:5001",
+                        "amount": 22.82,
+                        "status": "success"
+                    },
+                    {
+                        "sender": "127.0.0.1:5000",
+                        "recipient": "127.0.0.1:5002",
+                        "amount": 42.84,
+                        "status": "success"
+                    },
+                    {
+                        "sender": "127.0.0.1:5000",
+                        "recipient": "127.0.0.1:5001",
+                        "amount": 11.12,
+                        "status": "success"
+                    },
+                    {
+                        "sender": "127.0.0.1:5001",
+                        "recipient": "127.0.0.1:5002",
+                        "amount": 27.19,
+                        "status": "success"
+                    },
+                    {
+                        "sender": "127.0.0.1:5001",
+                        "recipient": "127.0.0.1:5002",
+                        "amount": 13.36,
+                        "status": "success"
+                    },
+                    {
+                        "sender": "127.0.0.1:5001",
+                        "recipient": "127.0.0.1:5002",
+                        "amount": 62.23,
+                        "status": "success"
+                    }
+                ],
+                "nonce": 29171,
+                "previous_hash": "fe1b376d1aa00984774576e021436cf56eb038722966cf0ffc851b6554462bf6",
+                "difficulty": 4
+            },
+            {
+                "index": 4,
+                "timestamp": 1742770533.4854088,
+                "transactions": [
+                    {
+                        "sender": "127.0.0.1:5002",
+                        "recipient": "127.0.0.1:5000",
+                        "amount": 5.54,
+                        "status": "success"
+                    },
+                    {
+                        "sender": "127.0.0.1:5001",
+                        "recipient": "127.0.0.1:5000",
+                        "amount": 85.68,
+                        "status": "success"
+                    }
+                ],
+                "nonce": 931906,
+                "previous_hash": "48b8b377e07f7d2f46c32da3631554290f36db4a8978d341ef61cf35b549807c",
+                "difficulty": 5
+            },
+            {
+                "index": 5,
+                "timestamp": 1742770545.1436188,
+                "transactions": [
+                    {
+                        "sender": "127.0.0.1:5001",
+                        "recipient": "127.0.0.1:5002",
+                        "amount": 83.58,
+                        "status": "success"
+                    },
+                    {
+                        "sender": "127.0.0.1:5001",
+                        "recipient": "127.0.0.1:5000",
+                        "amount": 67.35,
+                        "status": "success"
+                    },
+                    {
+                        "sender": "127.0.0.1:5002",
+                        "recipient": "127.0.0.1:5000",
+                        "amount": 61.3,
+                        "status": "success"
+                    },
+                    {
+                        "sender": "127.0.0.1:5002",
+                        "recipient": "127.0.0.1:5000",
+                        "amount": 17.18,
+                        "status": "success"
+                    },
+                    {
+                        "sender": "127.0.0.1:5002",
+                        "recipient": "127.0.0.1:5000",
+                        "amount": 68.78,
+                        "status": "success"
+                    }
+                ],
+                "nonce": 8579906,
+                "previous_hash": "834ddb9640c2133e60848c8e2cd0ae32725510fd7f035c2dd33b61e585825ebc",
+                "difficulty": 6
+            },
+            {
+                "index": 6,
+                "timestamp": 1742770574.0033674,
+                "transactions": [
+                    {
+                        "sender": "127.0.0.1:5000",
+                        "recipient": "127.0.0.1:5001",
+                        "amount": 40.72,
+                        "status": "success"
+                    },
+                    {
+                        "sender": "127.0.0.1:5002",
+                        "recipient": "127.0.0.1:5001",
+                        "amount": 22.05,
+                        "status": "success"
+                    },
+                    {
+                        "sender": "127.0.0.1:5002",
+                        "recipient": "127.0.0.1:5001",
+                        "amount": 15.14,
+                        "status": "success"
+                    },
+                    {
+                        "sender": "127.0.0.1:5002",
+                        "recipient": "127.0.0.1:5001",
+                        "amount": 74.95,
+                        "status": "success"
+                    },
+                    {
+                        "sender": "127.0.0.1:5002",
+                        "recipient": "127.0.0.1:5001",
+                        "amount": 36.84,
+                        "status": "success"
+                    },
+                    {
+                        "sender": "127.0.0.1:5001",
+                        "recipient": "127.0.0.1:5000",
+                        "amount": 75.82,
+                        "status": "success"
+                    }
+                ],
+                "nonce": 21754899,
+                "previous_hash": "31862f777feecad04a54c77eb8d7bc803ed102f20656faf720c890a3130685bf",
+                "difficulty": 6
+            }
+        ],
+        "pending_transactions": [],
+        "nodes": [
+            "127.0.0.1:5002",
+            "127.0.0.1:5000",
+            "127.0.0.1:5001"
+        ],
+        "difficulty": 4
+    },
+    "127.0.0.1:5002": {
+        "node_id": 5002,
+        "chain": [
+            {
+                "index": 1,
+                "timestamp": 1234567890,
+                "transactions": [],
+                "nonce": 100,
+                "previous_hash": "1",
+                "difficulty": 4
+            },
+            {
+                "index": 2,
+                "timestamp": 1742770531.9652762,
+                "transactions": [
+                    {
+                        "sender": "127.0.0.1:5000",
+                        "recipient": "127.0.0.1:5002",
+                        "amount": 28.23,
+                        "status": "success"
+                    },
+                    {
+                        "sender": "127.0.0.1:5002",
+                        "recipient": "127.0.0.1:5000",
+                        "amount": 67.99,
+                        "status": "success"
+                    }
+                ],
+                "nonce": 152998,
+                "previous_hash": "86e8ad073858fb6f96b221fe42b2a977a81f84e7b7a14fa3d991e5a08a159043",
+                "difficulty": 4
+            },
+            {
+                "index": 3,
+                "timestamp": 1742770532.1177375,
+                "transactions": [
+                    {
+                        "sender": "127.0.0.1:5001",
+                        "recipient": "127.0.0.1:5000",
+                        "amount": 3.95,
+                        "status": "success"
+                    },
+                    {
+                        "sender": "127.0.0.1:5002",
+                        "recipient": "127.0.0.1:5000",
+                        "amount": 56.56,
+                        "status": "success"
+                    },
+                    {
+                        "sender": "127.0.0.1:5002",
+                        "recipient": "127.0.0.1:5001",
+                        "amount": 22.82,
+                        "status": "success"
+                    },
+                    {
+                        "sender": "127.0.0.1:5000",
+                        "recipient": "127.0.0.1:5002",
+                        "amount": 42.84,
+                        "status": "success"
+                    },
+                    {
+                        "sender": "127.0.0.1:5000",
+                        "recipient": "127.0.0.1:5001",
+                        "amount": 11.12,
+                        "status": "success"
+                    },
+                    {
+                        "sender": "127.0.0.1:5001",
+                        "recipient": "127.0.0.1:5002",
+                        "amount": 27.19,
+                        "status": "success"
+                    },
+                    {
+                        "sender": "127.0.0.1:5001",
+                        "recipient": "127.0.0.1:5002",
+                        "amount": 13.36,
+                        "status": "success"
+                    },
+                    {
+                        "sender": "127.0.0.1:5001",
+                        "recipient": "127.0.0.1:5002",
+                        "amount": 62.23,
+                        "status": "success"
+                    }
+                ],
+                "nonce": 29171,
+                "previous_hash": "fe1b376d1aa00984774576e021436cf56eb038722966cf0ffc851b6554462bf6",
+                "difficulty": 4
+            },
+            {
+                "index": 4,
+                "timestamp": 1742770533.4854088,
+                "transactions": [
+                    {
+                        "sender": "127.0.0.1:5002",
+                        "recipient": "127.0.0.1:5000",
+                        "amount": 5.54,
+                        "status": "success"
+                    },
+                    {
+                        "sender": "127.0.0.1:5001",
+                        "recipient": "127.0.0.1:5000",
+                        "amount": 85.68,
+                        "status": "success"
+                    }
+                ],
+                "nonce": 931906,
+                "previous_hash": "48b8b377e07f7d2f46c32da3631554290f36db4a8978d341ef61cf35b549807c",
+                "difficulty": 5
+            },
+            {
+                "index": 5,
+                "timestamp": 1742770545.1436188,
+                "transactions": [
+                    {
+                        "sender": "127.0.0.1:5001",
+                        "recipient": "127.0.0.1:5002",
+                        "amount": 83.58,
+                        "status": "success"
+                    },
+                    {
+                        "sender": "127.0.0.1:5001",
+                        "recipient": "127.0.0.1:5000",
+                        "amount": 67.35,
+                        "status": "success"
+                    },
+                    {
+                        "sender": "127.0.0.1:5002",
+                        "recipient": "127.0.0.1:5000",
+                        "amount": 61.3,
+                        "status": "success"
+                    },
+                    {
+                        "sender": "127.0.0.1:5002",
+                        "recipient": "127.0.0.1:5000",
+                        "amount": 17.18,
+                        "status": "success"
+                    },
+                    {
+                        "sender": "127.0.0.1:5002",
+                        "recipient": "127.0.0.1:5000",
+                        "amount": 68.78,
+                        "status": "success"
+                    }
+                ],
+                "nonce": 8579906,
+                "previous_hash": "834ddb9640c2133e60848c8e2cd0ae32725510fd7f035c2dd33b61e585825ebc",
+                "difficulty": 6
+            },
+            {
+                "index": 6,
+                "timestamp": 1742770574.0033674,
+                "transactions": [
+                    {
+                        "sender": "127.0.0.1:5000",
+                        "recipient": "127.0.0.1:5001",
+                        "amount": 40.72,
+                        "status": "success"
+                    },
+                    {
+                        "sender": "127.0.0.1:5002",
+                        "recipient": "127.0.0.1:5001",
+                        "amount": 22.05,
+                        "status": "success"
+                    },
+                    {
+                        "sender": "127.0.0.1:5002",
+                        "recipient": "127.0.0.1:5001",
+                        "amount": 15.14,
+                        "status": "success"
+                    },
+                    {
+                        "sender": "127.0.0.1:5002",
+                        "recipient": "127.0.0.1:5001",
+                        "amount": 74.95,
+                        "status": "success"
+                    },
+                    {
+                        "sender": "127.0.0.1:5002",
+                        "recipient": "127.0.0.1:5001",
+                        "amount": 36.84,
+                        "status": "success"
+                    },
+                    {
+                        "sender": "127.0.0.1:5001",
+                        "recipient": "127.0.0.1:5000",
+                        "amount": 75.82,
+                        "status": "success"
+                    }
+                ],
+                "nonce": 21754899,
+                "previous_hash": "31862f777feecad04a54c77eb8d7bc803ed102f20656faf720c890a3130685bf",
+                "difficulty": 6
+            }
+        ],
+        "pending_transactions": [],
+        "nodes": [
+            "127.0.0.1:5002",
+            "127.0.0.1:5000",
+            "127.0.0.1:5001"
+        ],
+        "difficulty": 4
+    }
+}

@@ -2,17 +2,12 @@ import json
 import socket
 import threading
 import logging
-from blockchain import canonical_transaction  # your blockchain module
+from blockchain import canonical_transaction
 
+debug = False
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 
 def send_message(peer_address, message, expect_response=False):
-    """
-    Sends a JSON-encoded message to a peer node.
-    peer_address: A string in the format "host:port"
-    message: A dictionary to send
-    expect_response: If True, waits for a JSON response terminated by a newline.
-    """
     try:
         host, port_str = peer_address.split(":")
         port = int(port_str)
@@ -28,11 +23,6 @@ def send_message(peer_address, message, expect_response=False):
     return None
 
 def handle_client_connection(conn, addr, blockchain, node_identifier):
-    """
-    Handles incoming connection from a peer.
-    Reads a JSON message, processes it according to the message type,
-    and sends back a JSON response.
-    """
     try:
         file = conn.makefile(mode="rwb")
         line = file.readline()
@@ -42,22 +32,8 @@ def handle_client_connection(conn, addr, blockchain, node_identifier):
         msg_type = message.get("type")
         response = {}
 
-        if msg_type == "ELECTION":
-            # In random election mode, simply acknowledge the message.
-            response = {"status": "OK", "message": "Random election mode: ELECTION message acknowledged."}
-
-        elif msg_type == "PING":
+        if msg_type == "PING":
             response = {"status": "OK", "message": "Alive"}
-
-        elif msg_type == "COORDINATOR":
-            leader_id = message.get("leader_id")
-            blockchain.handle_coordinator_message(leader_id)
-            response = {"status": "OK", "message": f"Acknowledged new leader {leader_id}"}
-
-        elif msg_type == "HEARTBEAT":
-            leader_id = message.get("leader_id")
-            blockchain.handle_heartbeat(leader_id)
-            response = {"status": "OK", "message": "Heartbeat received."}
 
         elif msg_type == "GET_CHAIN":
             response = {"type": "CHAIN", "chain": blockchain.chain}
@@ -72,6 +48,14 @@ def handle_client_connection(conn, addr, blockchain, node_identifier):
                     response = {"status": "Error", "message": str(e)}
             else:
                 response = {"status": "Error", "message": "No node provided."}
+
+        elif msg_type == "ELECT_LEADER":
+            leader = message.get("leader")
+            if leader is not None:
+                blockchain.current_leader = leader
+                response = {"status": "OK", "message": f"Leader set to {leader}"}
+            else:
+                response = {"status": "Error", "message": "No leader provided."}
 
         elif msg_type == "NEW_TRANSACTION":
             transaction = message.get("transaction")
@@ -98,21 +82,27 @@ def handle_client_connection(conn, addr, blockchain, node_identifier):
             block = message.get("block")
             if block:
                 last_block = blockchain.last_block
-                if (block.get("index") == last_block["index"] + 1 and
-                    block.get("previous_hash") == blockchain.hash(last_block)):
-                    blockchain.chain.append(block)
-                    block_tx_set = set(canonical_transaction(tx) for tx in block.get("transactions", []))
-                    blockchain.current_transactions = [
-                        tx for tx in blockchain.current_transactions 
-                        if canonical_transaction(tx) not in block_tx_set
-                    ]
-                    block_hash = blockchain.hash(block)
-                    if block_hash not in blockchain.seen_blocks:
-                        blockchain.seen_blocks.add(block_hash)
-                        broadcast_message(blockchain, {"type": "NEW_BLOCK", "block": block})
-                    response = {"status": "OK", "message": "Block accepted and transactions synced."}
+                if block.get("index") == last_block["index"] + 1:
+                    if block.get("previous_hash") == blockchain.hash(last_block):
+                        blockchain.chain.append(block)
+                        block_tx_set = set(canonical_transaction(tx) for tx in block.get("transactions", []))
+                        blockchain.current_transactions = [
+                            tx for tx in blockchain.current_transactions 
+                            if canonical_transaction(tx) not in block_tx_set
+                        ]
+                        block_hash = blockchain.hash(block)
+                        if block_hash not in blockchain.seen_blocks:
+                            blockchain.seen_blocks.add(block_hash)
+                            broadcast_message(blockchain, {"type": "NEW_BLOCK", "block": block})
+                        response = {"status": "OK", "message": "Block accepted and transactions synced."}
+                    else:
+                        if debug:
+                            logging.info("Conflict detected. Resolving conflicts...")
+                        blockchain.resolve_conflicts()
+                        response = {"status": "OK", "message": "Chain synchronized with peers."}
                 elif block.get("index") > last_block["index"] + 1:
-                    logging.info("Our chain might be behind. Resolving conflicts...")
+                    if debug:
+                        logging.info("Chain may be behind. Resolving conflicts...")
                     blockchain.resolve_conflicts()
                     response = {"status": "OK", "message": "Chain synchronized with peers."}
                 else:
@@ -126,6 +116,9 @@ def handle_client_connection(conn, addr, blockchain, node_identifier):
         elif msg_type == "GET_PENDING":
             response = {"type": "PENDING", "pending": blockchain.current_transactions}
 
+        elif msg_type == "DISCOVER_PEERS":
+            response = {"type": "PEERS", "nodes": list(blockchain.nodes)}
+
         else:
             response = {"status": "Error", "message": "Unknown message type."}
 
@@ -137,17 +130,15 @@ def handle_client_connection(conn, addr, blockchain, node_identifier):
         conn.close()
 
 def run_server(host, port, blockchain, node_identifier):
-    """
-    Starts the server that listens for incoming connections from peers.
-    To enable cross-machine communication, you can bind the server to "0.0.0.0".
-    """
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server.bind((host, port))
     server.listen(5)
-    logging.info(f"Node {node_identifier} listening on {host}:{port}")
+    if debug:
+        logging.info(f"Node {node_identifier} listening on {host}:{port}")
     while True:
         conn, addr = server.accept()
-        logging.info(f"Accepted connection from {addr}")
+        if debug:
+            logging.info(f"Accepted connection from {addr}")
         threading.Thread(
             target=handle_client_connection,
             args=(conn, addr, blockchain, node_identifier),
@@ -155,24 +146,13 @@ def run_server(host, port, blockchain, node_identifier):
         ).start()
 
 def broadcast_message(blockchain, message):
-    """
-    Broadcasts a message to all known peer nodes.
-    If a node fails to respond 3 times in a row, it is removed.
-    """
     for node in list(blockchain.nodes):
-        response = send_message(node, message)
-        if response is None:
-            # Initialize failure_counts if not present.
-            if not hasattr(blockchain, "failure_counts"):
-                blockchain.failure_counts = {}
-            # Increment the failure counter.
-            blockchain.failure_counts[node] = blockchain.failure_counts.get(node, 0) + 1
-            
-            if blockchain.failure_counts[node] >= 3:
-                blockchain.nodes.discard(node)
-                del blockchain.failure_counts[node]
-                logging.info(f"Node {node} removed after 3 consecutive failures.")
-        else:
-            # Reset failure counter on success.
-            if hasattr(blockchain, "failure_counts") and node in blockchain.failure_counts:
-                blockchain.failure_counts[node] = 0
+        send_message(node, message)
+
+def broadcast_election(blockchain):
+    """
+    Broadcast the current leader (after election) to all peers.
+    """
+    leader = blockchain.elect_leader()
+    for node in list(blockchain.nodes):
+        send_message(node, {"type": "ELECT_LEADER", "leader": leader})
