@@ -27,6 +27,8 @@ class Blockchain:
         self.chain.append(genesis_block)
         self.seen_blocks.add(self.hash(genesis_block))
 
+        self.node_address = None  # New attribute for leader election
+
     def create_genesis_block(self):
         genesis_block = {
             'index': 1,
@@ -41,7 +43,11 @@ class Blockchain:
     def register_node(self, address):
         if ":" not in address:
             raise ValueError("Address must be in host:port format")
+        # Don't register our own address.
+        if hasattr(self, "node_address") and address == self.node_address:
+            return
         self.nodes.add(address)
+
 
     def elect_leader(self):
         """
@@ -152,14 +158,18 @@ class Blockchain:
             if response and response.get("type") == "PEERS":
                 peers = response.get("nodes", [])
                 for peer in peers:
+                    # Skip if the discovered peer is our own address.
+                    if hasattr(self, "node_address") and peer == self.node_address:
+                        continue
                     if peer not in self.nodes:
                         self.nodes.add(peer)
                         discovered = True
             else:
-                # Remove the node if no valid response is received
+                # Remove the node if no valid response is received.
                 self.nodes.remove(node)
                 discovered = True
         return discovered
+
 
 
     def new_block(self, nonce, previous_hash=None, auto_broadcast=True):

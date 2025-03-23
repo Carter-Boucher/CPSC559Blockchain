@@ -42,6 +42,7 @@ def main():
     # Use the port as the node's numeric identifier.
     node_identifier = args.port
     blockchain = Blockchain(node_id=node_identifier)
+    blockchain.node_address = f"{args.host}:{args.port}"
 
     # Register with peers if provided.
     if args.peers:
