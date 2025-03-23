@@ -131,9 +131,12 @@ class Blockchain:
                     if peer not in self.nodes:
                         self.nodes.add(peer)
                         discovered = True
-        if debug and discovered:
-            print("New peers discovered.")
+            else:
+                # Remove the node if no valid response is received
+                self.nodes.remove(node)
+                discovered = True
         return discovered
+
 
     def new_block(self, nonce, previous_hash=None, auto_broadcast=True):
         # Only the leader is allowed to mine and propose blocks.

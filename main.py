@@ -11,11 +11,14 @@ from GUI import BlockchainGUI
 
 def periodic_sync(blockchain):
     import time
+    count = 0
     while True:
         blockchain.resolve_conflicts()
         blockchain.discover_peers()
-        broadcast_election(blockchain)
-        time.sleep(15)
+        if count % 6 == 0:
+            broadcast_election(blockchain)
+        count += 1
+        time.sleep(5)
 
 def run_tests():
     print("Running tests...")
