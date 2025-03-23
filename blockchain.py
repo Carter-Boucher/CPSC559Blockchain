@@ -129,8 +129,6 @@ class Blockchain:
                 peers = response.get("nodes", [])
                 for peer in peers:
                     if peer not in self.nodes:
-                        if(self.node == peer):
-                            continue
                         self.nodes.add(peer)
                         discovered = True
             else:
