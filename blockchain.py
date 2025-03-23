@@ -45,21 +45,45 @@ class Blockchain:
 
     def elect_leader(self):
         """
-        Simple leader election: choose the node with the lowest numeric ID (e.g., port number)
-        among our own node_id and those extracted from our peer addresses.
+        Leader election based on: https://eprint.iacr.org/2022/993.pdf
+        This method uses the hash of the last block as a common seed (Qn). 
+        Each candidate computes a VRF value as:
+            vrf_output = SHA256(candidate_identifier + Qn)
+        where candidate_identifier is the node's unique string (e.g., "IP:port").
+        
+        The node with the smallest numeric VRF output is elected as leader.
         """
-        candidate_ids = [self.node_id]
-        for node in self.nodes:
-            try:
-                candidate_id = int(node.split(":")[-1])
-                candidate_ids.append(candidate_id)
-            except Exception:
-                continue
-        new_leader = min(candidate_ids)
-        self.current_leader = new_leader
+        # Use the hash of the last block as the common seed (Qn)
+        #resolved_conflicts before electing leader
+        self.resolve_conflicts()
+        Qn = self.hash(self.last_block)
+        
+        # Prepare a list of candidate identifiers.
+        # Assume that self.nodes contains addresses in "IP:port" format.
+        candidate_addresses = list(self.nodes)
+        
+        # Include our own address. If a full address (host:port) is available in self.node_address,
+        # use it; otherwise, fallback to using self.node_id (which may be just the port).
+        if hasattr(self, 'node_address'):
+            candidate_addresses.append(self.node_address)
+        else:
+            candidate_addresses.append(str(self.node_id))
+        
+        best_candidate = None
+        best_value = None
+        for candidate in candidate_addresses:
+            # Compute a VRF-like output using SHA256 over candidate's identifier and the common seed.
+            vrf_output = hashlib.sha256((candidate + Qn).encode()).hexdigest()
+            candidate_value = int(vrf_output, 16)
+            if best_value is None or candidate_value < best_value:
+                best_value = candidate_value
+                best_candidate = candidate
+        
+        self.current_leader = best_candidate
         if debug:
-            print(f"New leader elected: {new_leader}")
-        return new_leader
+            print(f"New leader elected: {best_candidate} (VRF value: {best_value})")
+        return best_candidate
+
 
     def valid_chain(self, chain):
         last_block = chain[0]
