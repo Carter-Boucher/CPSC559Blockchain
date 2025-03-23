@@ -4,7 +4,7 @@ import threading
 import logging
 from blockchain import canonical_transaction
 
-debug = True
+debug = False
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 
 def send_message(peer_address, message, expect_response=False):
