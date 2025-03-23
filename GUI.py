@@ -205,7 +205,7 @@ class BlockchainGUI:
     def mine_block(self):
         def task():
             # 1) Check if this node is the leader
-            if self.blockchain.node_id != self.blockchain.current_leader:
+            if self.blockchain.current_leader != self.blockchain.node_address:
                 self.log("You are not the leader, so you cannot mine a block.")
                 return
 

@@ -174,7 +174,7 @@ class Blockchain:
 
     def new_block(self, nonce, previous_hash=None, auto_broadcast=True):
         # Only the leader is allowed to mine and propose blocks.
-        print(self.current_leader, " not equal to ", self.node_address)
+        # print(self.current_leader, " not equal to ", self.node_address)
         if self.current_leader != self.node_address:
             print(self.current_leader, " not equal to ", self.node_address)
             if debug:
