@@ -4,7 +4,7 @@ from time import time
 import threading
 import random
 
-debug = False
+debug = True
 
 def canonical_transaction(tx):
     """Return a canonical JSON representation of a transaction, ignoring the 'status' field."""
@@ -18,16 +18,20 @@ class Blockchain:
         self.nodes = set()
         self.seen_transactions = set()
         self.seen_blocks = set()
-        self.current_leader = None  # New attribute for leader election
+        self.current_leader = None  # Leader election attribute
         
         self.difficulty = 4
         self.block_time_target = 10  # seconds
+
+        # Set the election start time (when the first node starts)
+        self.election_start_time = time()  # <-- NEW
 
         genesis_block = self.create_genesis_block()
         self.chain.append(genesis_block)
         self.seen_blocks.add(self.hash(genesis_block))
 
-        self.node_address = None  # New attribute for leader election
+        self.node_address = None  # Node address for leader election
+
 
     def create_genesis_block(self):
         genesis_block = {
@@ -48,37 +52,48 @@ class Blockchain:
             return
         self.nodes.add(address)
 
-
     def elect_leader(self):
+        if(debug):
+            print("Election started at node " + str(self.node_address))
         """
-        Leader election based on: https://eprint.iacr.org/2022/993.pdf
-        This method uses the hash of the last block as a common seed (Qn). 
-        Each candidate computes a VRF value as:
-            vrf_output = SHA256(candidate_identifier + Qn)
-        where candidate_identifier is the node's unique string (e.g., "IP:port").
-        
-        The node with the smallest numeric VRF output is elected as leader.
+        Elect a leader using a VRF-like mechanism.
+        Uses the hash of the last block as a common seed (Qn) and filters out unreachable nodes via a PING.
         """
-        # Use the hash of the last block as the common seed (Qn)
-        #resolved_conflicts before electing leader
+        from network import send_message
+        # Ensure chain is up-to-date before election.
         self.resolve_conflicts()
         Qn = self.hash(self.last_block)
         
-        # Prepare a list of candidate identifiers.
-        # Assume that self.nodes contains addresses in "IP:port" format.
+        # Build candidate list from known nodes plus our own address.
         candidate_addresses = list(self.nodes)
-        
-        # Include our own address. If a full address (host:port) is available in self.node_address,
-        # use it; otherwise, fallback to using self.node_id (which may be just the port).
-        if hasattr(self, 'node_address'):
+        if hasattr(self, 'node_address') and self.node_address is not None:
             candidate_addresses.append(self.node_address)
         else:
             candidate_addresses.append(str(self.node_id))
         
+        # Filter out unreachable candidates.
+        reachable_candidates = []
+        for candidate in candidate_addresses:
+            if candidate == self.node_address:
+                reachable_candidates.append(candidate)
+            else:
+                response = send_message(candidate, {"type": "PING"}, expect_response=True)
+                if response and response.get("status") == "OK":
+                    reachable_candidates.append(candidate)
+                else:
+                    #remove unreachable node
+                    self.nodes.remove(candidate)
+                    if debug:
+                        print(f"Candidate {candidate} is unreachable, skipping.")
+        
+        # Fallback if no candidates are reachable.
+        if not reachable_candidates:
+            reachable_candidates = [self.node_address]
+        
+        # Elect the candidate with the smallest VRF value.
         best_candidate = None
         best_value = None
-        for candidate in candidate_addresses:
-            # Compute a VRF-like output using SHA256 over candidate's identifier and the common seed.
+        for candidate in reachable_candidates:
             vrf_output = hashlib.sha256((candidate + Qn).encode()).hexdigest()
             candidate_value = int(vrf_output, 16)
             if best_value is None or candidate_value < best_value:
@@ -89,7 +104,6 @@ class Blockchain:
         if debug:
             print(f"New leader elected: {best_candidate} (VRF value: {best_value})")
         return best_candidate
-
 
     def valid_chain(self, chain):
         last_block = chain[0]
@@ -130,7 +144,7 @@ class Blockchain:
 
         if new_chain:
             self.chain = new_chain
-            # Remove pending transactions already confirmed in the new chain.
+            # Remove pending transactions that have been confirmed.
             confirmed = set()
             for block in new_chain:
                 for tx in block.get("transactions", []):
@@ -165,19 +179,16 @@ class Blockchain:
                         self.nodes.add(peer)
                         discovered = True
             else:
-                # Remove the node if no valid response is received.
+                # Remove node if no valid response.
                 self.nodes.remove(node)
                 discovered = True
         return discovered
 
-
-
     def new_block(self, nonce, previous_hash=None, auto_broadcast=True):
         # Only the leader is allowed to mine and propose blocks.
-        # print(self.current_leader, " not equal to ", self.node_address)
         if self.current_leader != self.node_address:
-            print(self.current_leader, " not equal to ", self.node_address)
             if debug:
+                print(f"Current leader {self.current_leader} not equal to node address {self.node_address}.")
                 print("Not the leader. Block mining is handled by the leader.")
             return None
 
@@ -270,9 +281,6 @@ class Blockchain:
         return guess_hash[:difficulty] == "0" * difficulty
 
     def proof_of_work(self, last_nonce):
-        """
-        Simple proof of work to find a nonce satisfying the current difficulty.
-        """
         nonce = 0
         while True:
             guess = f'{last_nonce}{nonce}{self.hash(self.last_block)}'.encode()

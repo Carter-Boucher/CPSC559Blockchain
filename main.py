@@ -11,12 +11,11 @@ from GUI import BlockchainGUI
 
 def periodic_sync(blockchain):
     import time
-    count = 0
     while True:
         blockchain.resolve_conflicts()
         blockchain.discover_peers()
         
-        # New: Fetch pending transactions from all peers
+        # Fetch pending transactions from all peers
         from network import send_message
         for node in list(blockchain.nodes):
             pending_response = send_message(node, {"type": "GET_PENDING"}, expect_response=True)
@@ -27,12 +26,24 @@ def periodic_sync(blockchain):
                     local_tx_strs = {json.dumps(local_tx, sort_keys=True) for local_tx in blockchain.current_transactions}
                     if tx_str not in local_tx_strs:
                         blockchain.current_transactions.append(tx)
-        
-        if count % 6 == 0:
-            from network import broadcast_election
-            broadcast_election(blockchain)
-        count += 1
         time.sleep(5)
+
+
+# In main.py, add a new function:
+def election_scheduler(blockchain):
+    import time
+    election_interval = 30  # seconds
+    while True:
+        current_time = time.time()
+        elapsed = current_time - blockchain.election_start_time
+        # Compute the next multiple of election_interval
+        next_election = blockchain.election_start_time + ((int(elapsed / election_interval) + 1) * election_interval)
+        time_to_next_election = next_election - current_time
+        time.sleep(time_to_next_election)
+        # Trigger the leader election exactly on schedule.
+        from network import broadcast_election
+        broadcast_election(blockchain)
+
 
 
 def run_tests():
@@ -60,6 +71,7 @@ def main():
     blockchain.node_address = f"{args.host}:{args.port}"
 
     # Register with peers if provided.
+    # In main.py, inside the peer registration loop
     if args.peers:
         for peer in args.peers.split(','):
             peer = peer.strip()
@@ -70,10 +82,22 @@ def main():
                     response = send_message(peer, {"type": "REGISTER_NODE", "node": f"{args.host}:{args.port}"}, expect_response=True)
                     if response and response.get("status") == "OK":
                         logging.info(f"Registered with peer {peer}.")
+                        # If the peer's election_start_time is earlier, update ours.
+                        peer_start_time = response.get("election_start_time")
+                        if peer_start_time and peer_start_time < blockchain.election_start_time:
+                            blockchain.election_start_time = peer_start_time
+                    else:
+                        logging.error(f"Error registering with peer {peer}: {response.get('message') if response else 'No response'}")
                 except Exception as e:
                     logging.error(f"Error registering with peer {peer}: {e}")
 
+
     blockchain.sync_chain()
+
+    # Immediately trigger an election if no leader exists (first node scenario)
+    # if blockchain.current_leader is None:
+    #     from network import broadcast_election
+    #     broadcast_election(blockchain)
 
     # Start the network server thread.
     server_thread = threading.Thread(
@@ -83,12 +107,15 @@ def main():
     )
     server_thread.start()
 
-    # Start periodic synchronization including leader election.
+    # Start periodic synchronization (for chain sync, peer discovery, etc.)
     sync_thread = threading.Thread(target=periodic_sync, args=(blockchain,), daemon=True)
     sync_thread.start()
 
-    sleep(1)
+    # Start the election scheduler (synchronized elections every 30 seconds)
+    election_thread = threading.Thread(target=election_scheduler, args=(blockchain,), daemon=True)
+    election_thread.start()
 
+    sleep(1)
     # Launch the GUI.
     root = tk.Tk()
     app = BlockchainGUI(root, blockchain, node_identifier, args)

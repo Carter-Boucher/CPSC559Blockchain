@@ -12,6 +12,8 @@ def send_message(peer_address, message, expect_response=False):
         host, port_str = peer_address.split(":")
         port = int(port_str)
         with socket.create_connection((host, port), timeout=5) as sock:
+            # Set a timeout for subsequent socket operations (including reading)
+            sock.settimeout(5)
             sock.sendall((json.dumps(message) + "\n").encode("utf-8"))
             if expect_response:
                 file = sock.makefile()
@@ -21,6 +23,7 @@ def send_message(peer_address, message, expect_response=False):
     except Exception as e:
         logging.error(f"Error sending message to {peer_address}: {e}")
     return None
+
 
 def handle_client_connection(conn, addr, blockchain, node_identifier):
     try:
@@ -43,11 +46,17 @@ def handle_client_connection(conn, addr, blockchain, node_identifier):
             if new_node:
                 try:
                     blockchain.register_node(new_node)
-                    response = {"status": "OK", "message": f"Node {new_node} registered."}
+                    # Return the election_start_time along with the registration response
+                    response = {
+                        "status": "OK",
+                        "message": f"Node {new_node} registered.",
+                        "election_start_time": blockchain.election_start_time  # <-- NEW
+                    }
                 except ValueError as e:
                     response = {"status": "Error", "message": str(e)}
             else:
                 response = {"status": "Error", "message": "No node provided."}
+
 
         elif msg_type == "ELECT_LEADER":
             leader = message.get("leader")
