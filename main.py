@@ -15,10 +15,25 @@ def periodic_sync(blockchain):
     while True:
         blockchain.resolve_conflicts()
         blockchain.discover_peers()
+        
+        # New: Fetch pending transactions from all peers
+        from network import send_message
+        for node in list(blockchain.nodes):
+            pending_response = send_message(node, {"type": "GET_PENDING"}, expect_response=True)
+            if pending_response and pending_response.get("type") == "PENDING":
+                pending_from_peer = pending_response.get("pending", [])
+                for tx in pending_from_peer:
+                    tx_str = json.dumps(tx, sort_keys=True)
+                    local_tx_strs = {json.dumps(local_tx, sort_keys=True) for local_tx in blockchain.current_transactions}
+                    if tx_str not in local_tx_strs:
+                        blockchain.current_transactions.append(tx)
+        
         if count % 6 == 0:
+            from network import broadcast_election
             broadcast_election(blockchain)
         count += 1
         time.sleep(5)
+
 
 def run_tests():
     print("Running tests...")

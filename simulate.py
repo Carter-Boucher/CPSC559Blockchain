@@ -1,170 +1,281 @@
 import random
 import json
 import time
-from blockchain import Blockchain
+from threading import Thread
 from compare_chains import compare_chains
 
-# Simulation parameters
-NUM_NODES = 20
-NUM_ITERATIONS = 80   # total simulation iterations
-# Action probabilities (they need not sum to 1 because random.choices accepts weights)
-TRANSACTION_PROB = 0.8  
-MINE_PROB = 0.1
-SYNC_PROB = 0.1
+from blockchain import Blockchain
+import network
 
-def mine_block_for_node(node):
-    """
-    Compute a valid nonce for the node's next block.
-    It iterates until node.valid_proof returns True.
-    """
-    last_block = node.last_block
-    last_nonce = last_block['nonce']
-    last_hash = node.hash(last_block)
-    difficulty = node.difficulty
-    nonce = 0
-    while not node.valid_proof(last_nonce, nonce, last_hash, difficulty):
-        nonce += 1
-    return nonce
+# --- Simulation network layer ---
 
-def propagate_block(leader, nodes):
-    """
-    Simulate network propagation of a new block mined by the leader.
-    For simplicity, if a node's chain is shorter than the leader's,
-    we replace it with a copy of the leader's chain.
-    Also, remove from pending transactions those that are confirmed.
-    """
-    new_block = leader.chain[-1]
-    for node in nodes.values():
-        if len(node.chain) < len(leader.chain):
-            # Copy the leader's chain (using a shallow copy for each block)
-            node.chain = [block.copy() for block in leader.chain]
-            # Remove confirmed transactions from pending list.
-            confirmed = set()
-            for block in node.chain:
-                for tx in block.get("transactions", []):
-                    # Use canonical representation ignoring status.
-                    confirmed.add(json.dumps({k: v for k, v in tx.items() if k != 'status'}, sort_keys=True))
-            node.current_transactions = [
-                tx for tx in node.current_transactions 
-                if json.dumps({k: v for k, v in tx.items() if k != 'status'}, sort_keys=True) not in confirmed
-            ]
+# Global dictionary to keep track of all simulated nodes.
+nodes_dict = {}
+crashed_nodes = set()
+reconnected_nodes = set()
 
-def propagate_transaction(tx, nodes):
-    """
-    Simulate broadcasting a new transaction to all nodes.
-    Each node uses its new_transaction method with auto_broadcast turned off.
-    """
-    for node in nodes.values():
-        node.new_transaction(tx['sender'], tx['recipient'], tx['amount'], auto_broadcast=False)
+def simulated_send_message(peer_address, message, expect_response=False):
+    """Simulate sending a message to a peer by directly calling its message handler.
+    If the target node is crashed, the message will be dropped."""
+    # Simulate a small network delay
+    time.sleep(random.uniform(0.01, 0.05))
+    if peer_address in nodes_dict:
+        target_node = nodes_dict[peer_address]
+        # If the node is crashed, simulate failure.
+        if getattr(target_node, "crashed", False):
+            return None
+        response = simulated_process_message(target_node, message)
+        return response if expect_response else None
+    return None
 
-def sync_all_nodes(nodes):
-    """
-    Simulate a network-wide chain synchronization.
-    Finds the longest chain among all nodes and updates nodes with shorter chains.
-    """
-    longest_chain = None
-    max_length = 0
-    for node in nodes.values():
-        if len(node.chain) > max_length:
-            longest_chain = node.chain
-            max_length = len(node.chain)
-    if longest_chain is not None:
-        for node in nodes.values():
-            if len(node.chain) < max_length:
-                node.chain = [block.copy() for block in longest_chain]
-                confirmed = set()
-                for block in node.chain:
-                    for tx in block.get("transactions", []):
-                        confirmed.add(json.dumps({k: v for k, v in tx.items() if k != 'status'}, sort_keys=True))
-                node.current_transactions = [
-                    tx for tx in node.current_transactions 
-                    if json.dumps({k: v for k, v in tx.items() if k != 'status'}, sort_keys=True) not in confirmed
+def simulated_process_message(blockchain, message):
+    """Simulate processing a message on a node.
+    This replicates the logic in network.py's handle_client_connection but simplified for simulation."""
+    msg_type = message.get("type")
+    response = {}
+
+    if msg_type == "PING":
+        response = {"status": "OK", "message": "Alive"}
+
+    elif msg_type == "GET_CHAIN":
+        response = {"type": "CHAIN", "chain": blockchain.chain}
+
+    elif msg_type == "REGISTER_NODE":
+        new_node = message.get("node")
+        if new_node:
+            try:
+                blockchain.register_node(new_node)
+                response = {"status": "OK", "message": f"Node {new_node} registered."}
+            except ValueError as e:
+                response = {"status": "Error", "message": str(e)}
+        else:
+            response = {"status": "Error", "message": "No node provided."}
+
+    elif msg_type == "ELECT_LEADER":
+        leader = message.get("leader")
+        if leader is not None:
+            blockchain.current_leader = leader
+            response = {"status": "OK", "message": f"Leader set to {leader}"}
+        else:
+            response = {"status": "Error", "message": "No leader provided."}
+
+    elif msg_type == "NEW_TRANSACTION":
+        # Use provided transaction object if available
+        transaction = message.get("transaction")
+        if transaction:
+            blockchain.new_transaction(
+                transaction.get("sender"),
+                transaction.get("recipient"),
+                transaction.get("amount"),
+                auto_broadcast=False
+            )
+            response = {"status": "OK", "message": "Transaction will be added."}
+        else:
+            sender = message.get("sender")
+            recipient = message.get("recipient")
+            amount = message.get("amount")
+            if sender and recipient and amount is not None:
+                blockchain.new_transaction(sender, recipient, amount, auto_broadcast=False)
+                response = {"status": "OK", "message": "Transaction will be added."}
+            else:
+                response = {"status": "Error", "message": "Invalid transaction data."}
+
+    elif msg_type == "NEW_BLOCK":
+        block = message.get("block")
+        if block:
+            last_block = blockchain.last_block
+            # Validate if the block follows correctly.
+            if block.get("index") == last_block["index"] + 1 and block.get("previous_hash") == blockchain.hash(last_block):
+                blockchain.chain.append(block)
+                # Remove confirmed transactions from pending pool.
+                block_tx_set = {json.dumps(tx, sort_keys=True) for tx in block.get("transactions", [])}
+                blockchain.current_transactions = [
+                    tx for tx in blockchain.current_transactions 
+                    if json.dumps(tx, sort_keys=True) not in block_tx_set
                 ]
+                response = {"status": "OK", "message": "Block accepted and transactions synced."}
+            elif block.get("index") > last_block["index"] + 1:
+                blockchain.resolve_conflicts()
+                response = {"status": "OK", "message": "Chain synchronized with peers."}
+            else:
+                response = {"status": "Error", "message": "Invalid block."}
+        else:
+            response = {"status": "Error", "message": "No block provided."}
 
-def main():
-    random.seed(42)  # for reproducibility
+    elif msg_type == "GET_NODES":
+        response = {"type": "NODES", "nodes": list(blockchain.nodes)}
 
-    # Create 100 nodes with node_ids starting at 5000 (addresses: 127.0.0.1:5000, …, 127.0.0.1:5099)
-    nodes = {}
-    base_port = 5000
-    for i in range(NUM_NODES):
-        port = base_port + i
-        address = f"127.0.0.1:{port}"
-        node = Blockchain(node_id=port)
-        nodes[address] = node
+    elif msg_type == "GET_PENDING":
+        response = {"type": "PENDING", "pending": blockchain.current_transactions}
 
-    # Register peers: each node learns about all other nodes.
-    addresses = list(nodes.keys())
-    for node in nodes.values():
-        for addr in addresses:
-            # Avoid self-registration.
-            if f":{node.node_id}" != addr:
-                node.register_node(addr)
-        # Each node runs a simple leader election. Given our method,
-        # they will all agree on the node with the smallest node_id as leader.
-        node.elect_leader()
+    elif msg_type == "DISCOVER_PEERS":
+        response = {"type": "PEERS", "nodes": list(blockchain.nodes)}
 
-    # Simulation loop: at each iteration, choose a random action.
-    for _ in range(NUM_ITERATIONS):
-        action = random.choices(
-            ["transaction", "mine", "sync"],
-            weights=[TRANSACTION_PROB, MINE_PROB, SYNC_PROB],
-            k=1
-        )[0]
+    else:
+        response = {"status": "Error", "message": "Unknown message type."}
 
-        #format: Progress: current_iteration/total_iterations, {current action}
-        print(f"\rProgress: {_}/{NUM_ITERATIONS}, {action}", end="")
+    return response
 
-        if action == "transaction":
-            # Randomly choose sender and recipient (they must differ)
-            sender_addr = random.choice(addresses)
-            recipient_addr = random.choice(addresses)
-            while recipient_addr == sender_addr:
-                recipient_addr = random.choice(addresses)
-            amount = round(random.uniform(1, 100), 2)
-            tx = {
-                "sender": sender_addr,
-                "recipient": recipient_addr,
-                "amount": amount,
-                "status": "pending"
-            }
-            propagate_transaction(tx, nodes)
+def simulated_broadcast_message(blockchain, message):
+    """Simulate broadcasting a message to all peers in a node's peer list."""
+    for peer in list(blockchain.nodes):
+        # If a node is crashed, skip sending the message.
+        if nodes_dict[peer].crashed:
+            continue
+        simulated_send_message(peer, message)
 
-        elif action == "mine":
-            # Only the leader is allowed to mine.
-            # With our election, the leader is the node with the lowest node_id.
-            leader_addr = f"127.0.0.1:{base_port}"
-            leader = nodes[leader_addr]
-            # Mine a block only if there are pending transactions.
-            if leader.current_transactions:
-                nonce = mine_block_for_node(leader)
-                leader.new_block(nonce, auto_broadcast=False)
-                propagate_block(leader, nodes)
+def simulated_broadcast_election(blockchain):
+    """Simulate a leader election broadcast."""
+    leader = blockchain.elect_leader()
+    for peer in list(blockchain.nodes):
+        simulated_send_message(peer, {"type": "ELECT_LEADER", "leader": leader})
 
-        elif action == "sync":
-            # Simulate a synchronization event.
-            sync_all_nodes(nodes)
+# Monkey-patch network functions for simulation.
+network.send_message = simulated_send_message
+network.broadcast_message = simulated_broadcast_message
+network.broadcast_election = simulated_broadcast_election
 
-        # A brief pause to mimic asynchronous behavior.
-        time.sleep(0.01)
+# --- Create simulation nodes ---
 
-    # Prepare final results in the expected format.
-    results = {}
-    for addr, node in nodes.items():
-        results[addr] = {
-            "node_id": node.node_id,
-            "chain": node.chain,
-            "pending_transactions": node.current_transactions,
-            "nodes": list(node.nodes),
-            "difficulty": node.difficulty
-        }
+NUM_NODES = 10
+BASE_PORT = 5000
+all_addresses = []
 
-    # Write simulation results to JSON file.
-    with open("simulation_results.json", "w") as f:
-        json.dump(results, f, indent=4)
+# Create 10 Blockchain nodes.
+for i in range(NUM_NODES):
+    host = "127.0.0.1"
+    port = BASE_PORT + i
+    node_address = f"{host}:{port}"
+    node = Blockchain(node_id=port)
+    node.node_address = node_address
+    node.crashed = False  # New attribute to simulate a crash
+    nodes_dict[node_address] = node
+    all_addresses.append(node_address)
 
-if __name__ == "__main__":
-    main()
-    print("\nSimulation complete. Results saved to simulation_results.json.")
-    compare_chains()
+# Each node registers all other nodes as peers.
+for node in nodes_dict.values():
+    for addr in all_addresses:
+        if addr != node.node_address:
+            node.nodes.add(addr)
 
+# --- New functions to simulate node crashes and reconnections ---
+
+def random_crash_node(crash_probability=0.02):
+    """
+    With the given probability, randomly select an online node (not already crashed)
+    and simulate a crash. When a node crashes, its address is removed from all peers' lists.
+    """
+    online_nodes = [addr for addr, node in nodes_dict.items() if not node.crashed]
+    if online_nodes and random.random() < crash_probability:
+        crash_addr = random.choice(online_nodes)
+        crashed_node = nodes_dict[crash_addr]
+        crashed_node.crashed = True
+        # Remove the crashed node from all other nodes' peer lists.
+        for node in nodes_dict.values():
+            if crash_addr in node.nodes:
+                node.nodes.remove(crash_addr)
+        #print(f"Node {crash_addr} has crashed!")
+
+def reconnect_node(node_address):
+    """
+    Reconnect a crashed node by setting its 'crashed' flag to False and
+    re-adding its address to all peers' lists so that it starts receiving updates again.
+    Also, immediately synchronize its chain with the network.
+    """
+    if node_address in nodes_dict:
+        node = nodes_dict[node_address]
+        if node.crashed:
+            node.crashed = False
+            # Re-add the node to all other nodes' peer lists.
+            for addr, other_node in nodes_dict.items():
+                if addr != node_address:
+                    other_node.nodes.add(node_address)
+            # Sync the node's chain with the network upon reconnection.
+            node.resolve_conflicts()
+            #print(f"Node {node_address} has reconnected and synchronized.")
+
+    reconnected_nodes.add(node_address)
+
+# Optionally, a function to randomly reconnect a crashed node.
+def random_reconnect_node(reconnect_probability=0.05):
+    """
+    With the given probability, randomly select a crashed node and reconnect it.
+    """
+    crashed_nodes = [addr for addr, node in nodes_dict.items() if node.crashed]
+    if crashed_nodes and random.random() < reconnect_probability:
+        # print("Node reconnected: ", crashed_nodes)
+        reconnect_addr = random.choice(crashed_nodes)
+        reconnect_node(reconnect_addr)
+
+# --- Simulation loop ---
+
+# Define possible actions.
+ACTIONS = ["new_transaction", "mine_block", "sync"]
+
+# Number of simulation iterations.
+NUM_ITERATIONS = 35
+
+def simulate_node_actions():
+    """Simulate random actions on each node."""
+    for iteration in range(NUM_ITERATIONS):
+        
+        random_crash_node(crash_probability=0.20)
+        # Attempt to randomly reconnect a crashed node.
+        random_reconnect_node(reconnect_probability=0.05)
+        
+        # Progress bar
+        print(f" Progress: {iteration+1}/{NUM_ITERATIONS}  Crashed nodes: {[addr for addr, node in nodes_dict.items() if node.crashed]}", end="\r")
+
+        for node in list(nodes_dict.values()):
+            # Skip actions for crashed nodes.
+            if getattr(node, "crashed", False):
+                continue
+
+            action = random.choices(ACTIONS, weights=[0.6, 0.1, 0.3])[0]
+            if action == "new_transaction":
+                # Create a random transaction.
+                sender = node.node_address
+                recipient = random.choice(all_addresses)
+                while recipient == sender:
+                    recipient = random.choice(all_addresses)
+                amount = round(random.uniform(1, 100), 2)
+                node.new_transaction(sender, recipient, amount, auto_broadcast=True)
+            elif action == "mine_block":
+                # Only attempt mining if the node is the leader and has pending transactions.
+                if node.current_leader == node.node_address and node.current_transactions:
+                    last_nonce = node.last_block['nonce']
+                    nonce = node.proof_of_work(last_nonce)
+                    previous_hash = node.hash(node.last_block)
+                    node.new_block(nonce, previous_hash, auto_broadcast=True)
+            elif action == "sync":
+                node.resolve_conflicts()
+                node.discover_peers()
+        # Every 10 iterations, simulate a broadcast election from a random node.
+        if iteration % 10 == 0:
+            random.choice(list(nodes_dict.values())).elect_leader()
+            simulated_broadcast_election(random.choice(list(nodes_dict.values())))
+        time.sleep(0.01)  # Small delay to simulate time passing
+
+# Run the simulation in a separate thread.
+simulation_thread = Thread(target=simulate_node_actions)
+simulation_thread.start()
+simulation_thread.join()
+
+# --- Output final state ---
+
+simulation_results = {}
+for addr, node in nodes_dict.items():
+    simulation_results[addr] = {
+        "Confirmed Blockchain": node.chain,
+        "pending_transactions": node.current_transactions,
+    }
+
+with open("simulation_results.json", "w") as f:
+    json.dump(simulation_results, f, indent=4)
+
+print("\nSimulation complete. Final state saved to simulation_results.json")
+dead_nodes = [addr for addr, node in nodes_dict.items() if node.crashed]
+print(f"Crashed nodes: {dead_nodes}")
+print(f"Reconnected nodes: {reconnected_nodes}")
+
+compare_chains()
