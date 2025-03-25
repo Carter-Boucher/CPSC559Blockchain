@@ -95,9 +95,9 @@ def main():
     blockchain.sync_chain()
 
     # Immediately trigger an election if no leader exists (first node scenario)
-    # if blockchain.current_leader is None:
-    #     from network import broadcast_election
-    #     broadcast_election(blockchain)
+    if blockchain.current_leader is None:
+        from network import broadcast_election
+        broadcast_election(blockchain)
 
     # Start the network server thread.
     server_thread = threading.Thread(
