@@ -12,7 +12,6 @@ def send_message(peer_address, message, expect_response=False):
         host, port_str = peer_address.split(":")
         port = int(port_str)
         with socket.create_connection((host, port), timeout=5) as sock:
-            # Set a timeout for subsequent socket operations (including reading)
             sock.settimeout(5)
             sock.sendall((json.dumps(message) + "\n").encode("utf-8"))
             if expect_response:
@@ -23,7 +22,6 @@ def send_message(peer_address, message, expect_response=False):
     except Exception as e:
         logging.error(f"Error sending message to {peer_address}: {e}")
     return None
-
 
 def handle_client_connection(conn, addr, blockchain, node_identifier):
     try:
@@ -46,17 +44,15 @@ def handle_client_connection(conn, addr, blockchain, node_identifier):
             if new_node:
                 try:
                     blockchain.register_node(new_node)
-                    # Return the election_start_time along with the registration response
                     response = {
                         "status": "OK",
                         "message": f"Node {new_node} registered.",
-                        "election_start_time": blockchain.election_start_time  # <-- NEW
+                        "election_start_time": blockchain.election_start_time
                     }
                 except ValueError as e:
                     response = {"status": "Error", "message": str(e)}
             else:
                 response = {"status": "Error", "message": "No node provided."}
-
 
         elif msg_type == "ELECT_LEADER":
             leader = message.get("leader")
@@ -88,6 +84,7 @@ def handle_client_connection(conn, addr, blockchain, node_identifier):
                     response = {"status": "Error", "message": "Invalid transaction data."}
 
         elif msg_type == "NEW_BLOCK":
+            # For backward compatibility, you can keep this handler if needed.
             block = message.get("block")
             if block:
                 last_block = blockchain.last_block
@@ -102,16 +99,11 @@ def handle_client_connection(conn, addr, blockchain, node_identifier):
                         block_hash = blockchain.hash(block)
                         if block_hash not in blockchain.seen_blocks:
                             blockchain.seen_blocks.add(block_hash)
-                            broadcast_message(blockchain, {"type": "NEW_BLOCK", "block": block})
                         response = {"status": "OK", "message": "Block accepted and transactions synced."}
                     else:
-                        if debug:
-                            logging.info("Conflict detected. Resolving conflicts...")
                         blockchain.resolve_conflicts()
                         response = {"status": "OK", "message": "Chain synchronized with peers."}
                 elif block.get("index") > last_block["index"] + 1:
-                    if debug:
-                        logging.info("Chain may be behind. Resolving conflicts...")
                     blockchain.resolve_conflicts()
                     response = {"status": "OK", "message": "Chain synchronized with peers."}
                 else:
@@ -127,6 +119,42 @@ def handle_client_connection(conn, addr, blockchain, node_identifier):
 
         elif msg_type == "DISCOVER_PEERS":
             response = {"type": "PEERS", "nodes": list(blockchain.nodes)}
+
+        elif msg_type == "BLOCK_PROPOSE":
+            block = message.get("block")
+            if block:
+                last_block = blockchain.last_block
+                # Validate that the block is the immediate next block
+                if (block.get("index") == last_block["index"] + 1 and
+                    block.get("previous_hash") == blockchain.hash(last_block) and
+                    blockchain.valid_proof(last_block['nonce'], block.get("nonce"), blockchain.hash(last_block),
+                                             block.get("difficulty", blockchain.difficulty))):
+                    response = {"vote": "approve"}
+                else:
+                    response = {"vote": "reject"}
+            else:
+                response = {"vote": "reject", "message": "No block provided."}
+
+        elif msg_type == "BLOCK_COMMIT":
+            block = message.get("block")
+            if block:
+                last_block = blockchain.last_block
+                if (block.get("index") == last_block["index"] + 1 and
+                    block.get("previous_hash") == blockchain.hash(last_block)):
+                    blockchain.chain.append(block)
+                    block_tx_set = set(canonical_transaction(tx) for tx in block.get("transactions", []))
+                    blockchain.current_transactions = [
+                        tx for tx in blockchain.current_transactions
+                        if canonical_transaction(tx) not in block_tx_set
+                    ]
+                    block_hash = blockchain.hash(block)
+                    if block_hash not in blockchain.seen_blocks:
+                        blockchain.seen_blocks.add(block_hash)
+                    response = {"status": "committed"}
+                else:
+                    response = {"status": "error", "message": "Block rejected during commit."}
+            else:
+                response = {"status": "error", "message": "No block provided."}
 
         else:
             response = {"status": "Error", "message": "Unknown message type."}

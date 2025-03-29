@@ -24,7 +24,7 @@ class Blockchain:
         self.block_time_target = 10  # seconds
 
         # Set the election start time (when the first node starts)
-        self.election_start_time = time()  # <-- NEW
+        self.election_start_time = time()
 
         genesis_block = self.create_genesis_block()
         self.chain.append(genesis_block)
@@ -32,11 +32,10 @@ class Blockchain:
 
         self.node_address = None  # Node address for leader election
 
-
     def create_genesis_block(self):
         genesis_block = {
             'index': 1,
-            'timestamp': 1234567890,  # fixed timestamp for genesis
+            'timestamp': 1234567890,
             'transactions': [],
             'nonce': 100,
             'previous_hash': '1',
@@ -47,7 +46,6 @@ class Blockchain:
     def register_node(self, address):
         if ":" not in address:
             raise ValueError("Address must be in host:port format")
-        # Don't register our own address.
         if hasattr(self, "node_address") and address == self.node_address:
             return
         self.nodes.add(address)
@@ -55,23 +53,16 @@ class Blockchain:
     def elect_leader(self):
         if(debug):
             print("Election started at node " + str(self.node_address))
-        """
-        Elect a leader using a VRF-like mechanism.
-        Uses the hash of the last block as a common seed (Qn) and filters out unreachable nodes via a PING.
-        """
         from network import send_message
-        # Ensure chain is up-to-date before election.
         self.resolve_conflicts()
         Qn = self.hash(self.last_block)
         
-        # Build candidate list from known nodes plus our own address.
         candidate_addresses = list(self.nodes)
         if hasattr(self, 'node_address') and self.node_address is not None:
             candidate_addresses.append(self.node_address)
         else:
             candidate_addresses.append(str(self.node_id))
         
-        # Filter out unreachable candidates.
         reachable_candidates = []
         for candidate in candidate_addresses:
             if candidate == self.node_address:
@@ -81,16 +72,13 @@ class Blockchain:
                 if response and response.get("status") == "OK":
                     reachable_candidates.append(candidate)
                 else:
-                    #remove unreachable node
-                    self.nodes.remove(candidate)
+                    self.nodes.discard(candidate)
                     if debug:
                         print(f"Candidate {candidate} is unreachable, skipping.")
         
-        # Fallback if no candidates are reachable.
         if not reachable_candidates:
             reachable_candidates = [self.node_address]
         
-        # Elect the candidate with the smallest VRF value.
         best_candidate = None
         best_value = None
         for candidate in reachable_candidates:
@@ -120,10 +108,6 @@ class Blockchain:
         return True
 
     def resolve_conflicts(self):
-        """
-        Consensus algorithm: replace our chain with the longest valid chain.
-        In ties, choose the chain with the lowest hash.
-        """
         from network import send_message
         neighbours = list(self.nodes)
         new_chain = None
@@ -144,7 +128,6 @@ class Blockchain:
 
         if new_chain:
             self.chain = new_chain
-            # Remove pending transactions that have been confirmed.
             confirmed = set()
             for block in new_chain:
                 for tx in block.get("transactions", []):
@@ -172,15 +155,13 @@ class Blockchain:
             if response and response.get("type") == "PEERS":
                 peers = response.get("nodes", [])
                 for peer in peers:
-                    # Skip if the discovered peer is our own address.
                     if hasattr(self, "node_address") and peer == self.node_address:
                         continue
                     if peer not in self.nodes:
                         self.nodes.add(peer)
                         discovered = True
             else:
-                # Remove node if no valid response.
-                self.nodes.remove(node)
+                self.nodes.discard(node)
                 discovered = True
         return discovered
 
@@ -204,22 +185,49 @@ class Blockchain:
         block = {
             'index': len(self.chain) + 1,
             'timestamp': time(),
-            'transactions': self.current_transactions,
+            'transactions': self.current_transactions.copy(),
             'nonce': nonce,
             'previous_hash': previous_hash or self.hash(self.chain[-1]),
             'difficulty': self.difficulty
         }
 
-        self.chain.append(block)
-        self.current_transactions = []
-        block_hash = self.hash(block)
-        if block_hash not in self.seen_blocks:
-            self.seen_blocks.add(block_hash)
-            if auto_broadcast:
-                from network import broadcast_message
-                broadcast_message(self, {"type": "NEW_BLOCK", "block": block})
-        self.adjust_difficulty()
-        return block
+        if auto_broadcast:
+            committed_block = self.propose_block(block)
+            return committed_block
+        else:
+            self.chain.append(block)
+            self.current_transactions = []
+            block_hash = self.hash(block)
+            if block_hash not in self.seen_blocks:
+                self.seen_blocks.add(block_hash)
+            self.adjust_difficulty()
+            return block
+
+    def propose_block(self, block):
+        from network import send_message
+        approvals = 1  # Leader's own vote
+        total_nodes = len(self.nodes) + 1  # including self
+        quorum_threshold = total_nodes // 2 + 1
+        for node in list(self.nodes):
+            response = send_message(node, {"type": "BLOCK_PROPOSE", "block": block}, expect_response=True)
+            if response and response.get("vote") == "approve":
+                approvals += 1
+        if approvals >= quorum_threshold:
+            for node in list(self.nodes):
+                send_message(node, {"type": "BLOCK_COMMIT", "block": block})
+            self.chain.append(block)
+            self.current_transactions = []
+            block_hash = self.hash(block)
+            if block_hash not in self.seen_blocks:
+                self.seen_blocks.add(block_hash)
+            if debug:
+                print("Block committed with consensus. Approvals:", approvals)
+            self.adjust_difficulty()
+            return block
+        else:
+            if debug:
+                print("Block proposal rejected by consensus. Approvals:", approvals, "of", quorum_threshold, "required.")
+            return None
 
     def adjust_difficulty(self):
         if len(self.chain) < 2:

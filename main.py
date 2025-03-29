@@ -15,7 +15,6 @@ def periodic_sync(blockchain):
         blockchain.resolve_conflicts()
         blockchain.discover_peers()
         
-        # Fetch pending transactions from all peers
         from network import send_message
         for node in list(blockchain.nodes):
             pending_response = send_message(node, {"type": "GET_PENDING"}, expect_response=True)
@@ -28,32 +27,25 @@ def periodic_sync(blockchain):
                         blockchain.current_transactions.append(tx)
         time.sleep(5)
 
-
-# In main.py, add a new function:
 def election_scheduler(blockchain):
     import time
     election_interval = 30  # seconds
     while True:
         current_time = time.time()
         elapsed = current_time - blockchain.election_start_time
-        # Compute the next multiple of election_interval
         next_election = blockchain.election_start_time + ((int(elapsed / election_interval) + 1) * election_interval)
         time_to_next_election = next_election - current_time
         time.sleep(time_to_next_election)
-        # Trigger the leader election exactly on schedule.
         from network import broadcast_election
         broadcast_election(blockchain)
 
-
-
 def run_tests():
     print("Running tests...")
-    # Here you can add tests for leader election and block proposals.
     print("Tests complete.")
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Advanced P2P Blockchain Node with Electrum-like GUI (pure Python)"
+        description="Advanced P2P Blockchain Node with Synchronous Consensus (pure Python)"
     )
     parser.add_argument('--host', default="127.0.0.1", help='Host address of this node (use "0.0.0.0" to listen on all interfaces)')
     parser.add_argument('-p', '--port', default=5000, type=int, help='Port to listen on')
@@ -65,13 +57,10 @@ def main():
         run_tests()
         return
 
-    # Use the port as the node's numeric identifier.
     node_identifier = args.port
     blockchain = Blockchain(node_id=node_identifier)
     blockchain.node_address = f"{args.host}:{args.port}"
 
-    # Register with peers if provided.
-    # In main.py, inside the peer registration loop
     if args.peers:
         for peer in args.peers.split(','):
             peer = peer.strip()
@@ -82,7 +71,6 @@ def main():
                     response = send_message(peer, {"type": "REGISTER_NODE", "node": f"{args.host}:{args.port}"}, expect_response=True)
                     if response and response.get("status") == "OK":
                         logging.info(f"Registered with peer {peer}.")
-                        # If the peer's election_start_time is earlier, update ours.
                         peer_start_time = response.get("election_start_time")
                         if peer_start_time and peer_start_time < blockchain.election_start_time:
                             blockchain.election_start_time = peer_start_time
@@ -91,15 +79,12 @@ def main():
                 except Exception as e:
                     logging.error(f"Error registering with peer {peer}: {e}")
 
-
     blockchain.sync_chain()
 
-    # Immediately trigger an election if no leader exists (first node scenario)
     if blockchain.current_leader is None:
         from network import broadcast_election
         broadcast_election(blockchain)
 
-    # Start the network server thread.
     server_thread = threading.Thread(
         target=run_server,
         args=(args.host, args.port, blockchain, node_identifier),
@@ -107,16 +92,13 @@ def main():
     )
     server_thread.start()
 
-    # Start periodic synchronization (for chain sync, peer discovery, etc.)
     sync_thread = threading.Thread(target=periodic_sync, args=(blockchain,), daemon=True)
     sync_thread.start()
 
-    # Start the election scheduler (synchronized elections every 30 seconds)
     election_thread = threading.Thread(target=election_scheduler, args=(blockchain,), daemon=True)
     election_thread.start()
 
     sleep(1)
-    # Launch the GUI.
     root = tk.Tk()
     app = BlockchainGUI(root, blockchain, node_identifier, args)
     root.mainloop()

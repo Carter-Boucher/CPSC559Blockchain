@@ -133,11 +133,9 @@ class BlockchainGUI:
         self.update_leader_status()
 
     def update_leader_status(self):
-        # Update the leader status every 5 seconds.
         current_leader = self.blockchain.current_leader if self.blockchain.current_leader is not None else "Unknown"
         self.leader_var.set(f"Leader: {current_leader}")
         self.root.after(5000, self.update_leader_status)
-        # print(f"Leader: {current_leader}")
 
     def log(self, message):
         self.log_text.insert(tk.END, message + "\n")
@@ -204,39 +202,34 @@ class BlockchainGUI:
 
     def mine_block(self):
         def task():
-            # 1) Check if this node is the leader
             if self.blockchain.current_leader != self.blockchain.node_address:
                 self.log("You are not the leader, so you cannot mine a block.")
                 return
 
-            # 2) Check if there are transactions to mine
             if not self.blockchain.current_transactions:
                 self.log("No transactions available to mine. Add a transaction first.")
                 return
 
             self.log("Mining a new block...")
 
-            # 3) Perform proof-of-work and create the new block
             last_block = self.blockchain.last_block
             last_nonce = last_block['nonce']
             nonce = self.blockchain.proof_of_work(last_nonce)
             previous_hash = self.blockchain.hash(last_block)
             block = self.blockchain.new_block(nonce, previous_hash, auto_broadcast=True)
 
-            # 4) If a block was successfully created, log and update GUI
             if block:
-                self.log("New Block Forged")
+                self.log("New Block Forged and committed via consensus.")
                 self.block_info_text.delete("1.0", tk.END)
                 self.block_info_text.insert(tk.END, json.dumps(block, indent=4))
+            else:
+                self.log("Block proposal failed consensus. Please try again.")
 
-            # 5) Refresh displays
             self.refresh_pending_transactions()
             self.refresh_success_transactions()
             self.refresh_ledger()
 
-        # 6) Run the mining task in a separate thread
         threading.Thread(target=task, daemon=True).start()
-
 
     def refresh_nodes(self):
         for item in self.nodes_tree.get_children():
