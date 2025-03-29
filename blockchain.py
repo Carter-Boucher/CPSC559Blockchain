@@ -4,7 +4,7 @@ from time import time
 import threading
 import random
 
-debug = True
+debug = False
 
 def canonical_transaction(tx):
     """Return a canonical JSON representation of a transaction, ignoring the 'status' field."""
