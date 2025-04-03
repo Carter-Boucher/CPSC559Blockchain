@@ -51,7 +51,7 @@ class Blockchain:
         self.nodes.add(address)
 
     def elect_leader(self):
-        if(debug):
+        if debug:
             print("Election started at node " + str(self.node_address))
         from network import send_message
         self.resolve_conflicts()
@@ -107,24 +107,28 @@ class Blockchain:
             current_index += 1
         return True
 
+    def cumulative_work(self, chain=None):
+        if chain is None:
+            chain = self.chain
+        sums = sum(block.get("difficulty", self.difficulty) for block in chain)
+        if(debug): print(f"Cumulative work: {sums}")
+        return sums
+
     def resolve_conflicts(self):
         from network import send_message
         neighbours = list(self.nodes)
         new_chain = None
-        max_length = len(self.chain)
-        current_chain_hash = self.hash_chain()
+        current_work = self.cumulative_work()
 
         for node in neighbours:
             response = send_message(node, {"type": "GET_CHAIN"}, expect_response=True)
             if response and response.get("type") == "CHAIN":
                 chain = response.get("chain")
                 if chain and self.valid_chain(chain):
-                    chain_length = len(chain)
-                    chain_hash = self.hash_chain(chain)
-                    if chain_length > max_length or (chain_length == max_length and chain_hash < current_chain_hash):
-                        max_length = chain_length
+                    chain_work = self.cumulative_work(chain)
+                    if chain_work > current_work:
+                        current_work = chain_work
                         new_chain = chain
-                        current_chain_hash = chain_hash
 
         if new_chain:
             self.chain = new_chain
@@ -137,7 +141,7 @@ class Blockchain:
                 if canonical_transaction(tx) not in confirmed
             ]
             if debug:
-                print("Chain replaced via resolve_conflicts.")
+                print("Chain replaced via resolve_conflicts with higher cumulative work.")
             return True
 
         if debug:
