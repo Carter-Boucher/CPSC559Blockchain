@@ -1,6 +1,7 @@
 import hashlib
 import json
 from time import time
+import uuid
 import threading
 import random
 
@@ -248,30 +249,34 @@ class Blockchain:
             if debug:
                 print(f"Difficulty decreased to {self.difficulty}")
 
-    def new_transaction(self, sender, recipient, amount, auto_broadcast=True):
+    def new_transaction(self, sender, recipient, amount, auto_broadcast=True, transaction=None):
         if sender == "0":
             if debug:
                 print("Ignoring transaction from sender '0'.")
             return self.last_block['index'] + 1
 
-        transaction = {
-            'sender': sender,
-            'recipient': recipient,
-            'amount': amount,
-            'status': 'pending'
-        }
-        tx_str = json.dumps(transaction, sort_keys=True)
-        if tx_str in self.seen_transactions:
+        if transaction is None:
+            transaction = {
+                'id': str(uuid.uuid4()),  # Unique identifier for each transaction
+                'sender': sender,
+                'recipient': recipient,
+                'amount': amount,
+                'status': 'pending'
+            }
+
+        # Check if a transaction with the same id is already added
+        if any(tx.get("id") == transaction.get("id") for tx in self.current_transactions):
             return self.last_block['index'] + 1
 
         self.current_transactions.append(transaction)
-        self.seen_transactions.add(tx_str)
 
         if auto_broadcast:
             from network import broadcast_message
             broadcast_message(self, {"type": "NEW_TRANSACTION", "transaction": transaction})
 
         return self.last_block['index'] + 1
+
+
 
     def hash(self, block):
         block_string = json.dumps(block, sort_keys=True).encode()

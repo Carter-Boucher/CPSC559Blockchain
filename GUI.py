@@ -55,8 +55,8 @@ class BlockchainGUI:
         refresh_pending_btn.pack(side=tk.LEFT, padx=5)
         pending_tx_frame = ttk.Frame(self.pending_transactions_tab)
         pending_tx_frame.pack(padx=10, pady=5, fill=tk.BOTH, expand=True)
-        self.pending_tx_tree = ttk.Treeview(pending_tx_frame, columns=("Sender", "Recipient", "Amount", "Status", "Block"), show="headings")
-        for col in ("Sender", "Recipient", "Amount", "Status", "Block"):
+        self.pending_tx_tree = ttk.Treeview(pending_tx_frame, columns=("id", "Sender", "Recipient", "Amount", "Status", "Block"), show="headings")
+        for col in ("id", "Sender", "Recipient", "Amount", "Status", "Block"):
             self.pending_tx_tree.heading(col, text=col)
         self.pending_tx_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         pending_tx_scroll = ttk.Scrollbar(pending_tx_frame, orient="vertical", command=self.pending_tx_tree.yview)
@@ -68,8 +68,8 @@ class BlockchainGUI:
         notebook.add(self.success_transactions_tab, text="Success Transactions")
         success_tx_frame = ttk.Frame(self.success_transactions_tab)
         success_tx_frame.pack(padx=10, pady=5, fill=tk.BOTH, expand=True)
-        self.success_tx_tree = ttk.Treeview(success_tx_frame, columns=("Sender", "Recipient", "Amount", "Status", "Block"), show="headings")
-        for col in ("Sender", "Recipient", "Amount", "Status", "Block"):
+        self.success_tx_tree = ttk.Treeview(success_tx_frame, columns=("id", "Sender", "Recipient", "Amount", "Status", "Block"), show="headings")
+        for col in ("id", "Sender", "Recipient", "Amount", "Status", "Block"):
             self.success_tx_tree.heading(col, text=col)
         self.success_tx_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         success_tx_scroll = ttk.Scrollbar(success_tx_frame, orient="vertical", command=self.success_tx_tree.yview)
@@ -188,6 +188,7 @@ class BlockchainGUI:
         for tx in self.blockchain.current_transactions:
             if tx.get("status", "pending") == "pending":
                 self.pending_tx_tree.insert("", tk.END, values=(
+                    tx.get("id", ""),
                     tx.get("sender", ""),
                     tx.get("recipient", ""),
                     tx.get("amount", ""),
@@ -202,6 +203,7 @@ class BlockchainGUI:
             for tx in block['transactions']:
                 if tx.get("status") == "success":
                     self.success_tx_tree.insert("", tk.END, values=(
+                        tx.get("id", ""),
                         tx.get("sender", ""),
                         tx.get("recipient", ""),
                         tx.get("amount", ""),

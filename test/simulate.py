@@ -2,7 +2,7 @@ import random
 import json
 import time
 from threading import Thread
-from compare_chains import compare_chains
+from test.compare_chains import compare_chains
 
 from blockchain import Blockchain
 import network

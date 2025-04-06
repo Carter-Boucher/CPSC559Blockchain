@@ -64,24 +64,21 @@ def handle_client_connection(conn, addr, blockchain, node_identifier):
 
         elif msg_type == "NEW_TRANSACTION":
             transaction = message.get("transaction")
-            if not transaction:
+            if transaction:
+                # Use the provided transaction directly
+                blockchain.new_transaction(None, None, None, auto_broadcast=False, transaction=transaction)
+                response = {"status": "OK", "message": "Transaction will be added."}
+            else:
                 sender = message.get("sender")
                 recipient = message.get("recipient")
                 amount = message.get("amount")
                 if sender and recipient and amount is not None:
-                    blockchain.new_transaction(sender, recipient, amount)
+                    blockchain.new_transaction(sender, recipient, amount, auto_broadcast=False)
                     response = {"status": "OK", "message": "Transaction will be added."}
                 else:
                     response = {"status": "Error", "message": "Missing transaction fields."}
-            else:
-                sender = transaction.get("sender")
-                recipient = transaction.get("recipient")
-                amount = transaction.get("amount")
-                if sender and recipient and amount is not None:
-                    blockchain.new_transaction(sender, recipient, amount)
-                    response = {"status": "OK", "message": "Transaction will be added."}
-                else:
-                    response = {"status": "Error", "message": "Invalid transaction data."}
+
+
 
         elif msg_type == "NEW_BLOCK":
             # For backward compatibility, you can keep this handler if needed.
