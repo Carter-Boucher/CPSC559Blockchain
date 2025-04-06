@@ -131,11 +131,20 @@ class BlockchainGUI:
 
         # Start periodic update of leader status.
         self.update_leader_status()
+        self.update_gui()
 
     def update_leader_status(self):
         current_leader = self.blockchain.current_leader if self.blockchain.current_leader is not None else "Unknown"
         self.leader_var.set(f"Leader: {current_leader}")
         self.root.after(5000, self.update_leader_status)
+
+    def update_gui(self):
+        self.refresh_pending_transactions()
+        self.refresh_success_transactions()
+        self.refresh_nodes()
+        self.refresh_ledger()
+        # Schedule the next update after 5000 milliseconds (adjust as needed)
+        self.root.after(5000, self.update_gui)
 
     def log(self, message):
         self.log_text.insert(tk.END, message + "\n")
