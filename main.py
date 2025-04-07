@@ -25,6 +25,9 @@ def periodic_sync(blockchain):
                     local_tx_strs = {json.dumps(local_tx, sort_keys=True) for local_tx in blockchain.current_transactions}
                     if tx_str not in local_tx_strs:
                         blockchain.current_transactions.append(tx)
+
+        blockchain.cleanup_pending_transactions()
+        
         time.sleep(5)
 
 def election_scheduler(blockchain):

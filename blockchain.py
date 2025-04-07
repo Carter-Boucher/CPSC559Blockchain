@@ -318,3 +318,18 @@ class Blockchain:
             if guess_hash[:self.difficulty] == "0" * self.difficulty:
                 return nonce
             nonce += 1
+
+    def cleanup_pending_transactions(self):
+        """
+        Remove transactions from the pending list if their id is found in any block of the chain.
+        """
+        # Gather all transaction ids from the confirmed blocks in the ledger.
+        confirmed_ids = {tx.get("id") for block in self.chain for tx in block.get("transactions", [])}
+        original_count = len(self.current_transactions)
+        # Keep only transactions that have not been confirmed.
+        self.current_transactions = [tx for tx in self.current_transactions if tx.get("id") not in confirmed_ids]
+        if debug:
+            removed = original_count - len(self.current_transactions)
+            if removed > 0:
+                if(debug): print(f"Cleaned up {removed} confirmed pending transaction(s).")
+
