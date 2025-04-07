@@ -162,13 +162,19 @@ class Blockchain:
                 for peer in peers:
                     if hasattr(self, "node_address") and peer == self.node_address:
                         continue
-                    if peer not in self.nodes:
-                        self.nodes.add(peer)
-                        discovered = True
+                    # Add liveness check: only add if the peer responds to a PING
+                    ping_response = send_message(peer, {"type": "PING"}, expect_response=True)
+                    if ping_response and ping_response.get("status") == "OK":
+                        if peer not in self.nodes:
+                            self.nodes.add(peer)
+                            discovered = True
+                    else:
+                        continue
             else:
                 self.nodes.discard(node)
                 discovered = True
         return discovered
+
 
     def new_block(self, nonce, previous_hash=None, auto_broadcast=True):
         # Only the leader is allowed to mine and propose blocks.
