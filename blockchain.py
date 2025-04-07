@@ -264,7 +264,13 @@ class Blockchain:
                 'status': 'pending'
             }
 
-        # Check if a transaction with the same id is already added
+        # If the transaction has already been processed (seen), skip adding it.
+        if transaction.get("id") in self.seen_transactions:
+            if debug:
+                print("Transaction already processed (seen).")
+            return self.last_block['index'] + 1
+
+        # Check if a transaction with the same ID is already pending.
         if any(tx.get("id") == transaction.get("id") for tx in self.current_transactions):
             return self.last_block['index'] + 1
 
@@ -275,6 +281,7 @@ class Blockchain:
             broadcast_message(self, {"type": "NEW_TRANSACTION", "transaction": transaction})
 
         return self.last_block['index'] + 1
+
 
 
 
