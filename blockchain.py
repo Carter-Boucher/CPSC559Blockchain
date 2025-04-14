@@ -60,20 +60,20 @@ class Blockchain:
         """Elect a leader using a VRF-like approach (ECDSA sign + hash)."""
         from network import send_message
         
-        # 1) Sync with peers so we have the latest chain
+        # Sync with peers so we have the latest chain
         self.resolve_conflicts()
 
-        # 2) The seed is the hash of our last block
+        # The seed is the hash of our last block
         Qn = self.hash(self.last_block)
 
-        # 3) Build the list of candidates
+        # Build the list of candidates
         candidate_addresses = list(self.nodes)
         if self.node_address is not None:
             candidate_addresses.append(self.node_address)
         else:
             candidate_addresses.append(str(self.node_id))
 
-        # 4) Ping each candidate to ensure it's alive
+        # Ping each candidate to ensure it's alive
         reachable_candidates = []
         for candidate in candidate_addresses:
             if candidate == self.node_address:
@@ -85,8 +85,8 @@ class Blockchain:
                 else:
                     self.nodes.discard(candidate)
 
-        # 5) Everyone (including me) signs the seed and broadcasts
-        #    We'll store a local "vrf_submissions" dict keyed by candidate
+        # Everyone (including me) signs the seed and broadcasts
+        # We'll store a local "vrf_submissions" dict keyed by candidate
         vrf_submissions = {}
 
         # Function to sign the seed with our private key, 
@@ -109,7 +109,7 @@ class Blockchain:
             "candidate": self.node_address
         }
 
-        # 6) Ask each reachable candidate for their VRF submission
+        # Ask each reachable candidate for their VRF submission
         for candidate in reachable_candidates:
             if candidate == self.node_address:
                 continue
@@ -123,7 +123,7 @@ class Blockchain:
                 # We'll verify it below
                 vrf_submissions[candidate] = submission
 
-        # 7) Verify each candidate’s submission
+        # Verify each candidate’s submission
         valid_candidates = []
         for cand, sub in vrf_submissions.items():
             pubkey_raw = base64.b64decode(sub["public_key"])
@@ -157,7 +157,7 @@ class Blockchain:
                 print("No valid leader submissions found!")
             return self.current_leader
 
-        # 8) Pick the smallest output_hash
+        # Pick the smallest output_hash
         valid_candidates.sort(key=lambda x: x[1])  # sort by output_hash
         best_candidate, best_hash = valid_candidates[0]
 
