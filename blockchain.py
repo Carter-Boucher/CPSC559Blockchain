@@ -95,7 +95,7 @@ class Blockchain:
             signature_bytes = self.ecdsa_private_key.sign(seed.encode('utf-8'))
             return base64.b64encode(signature_bytes).decode('utf-8')
         
-        print(f"Node {self.node_address} signing seed {Qn} with private key.")
+        if(debug): print(f"Node {self.node_address} signing seed {Qn} with private key.")
 
         # My own submission
         my_signature_b64 = sign_seed(Qn)
