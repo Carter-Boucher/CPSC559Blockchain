@@ -120,7 +120,6 @@ class Blockchain:
             }, expect_response=True)
             if response and response.get("status") == "OK" and "submission" in response:
                 submission = response["submission"]
-                # We'll verify it below
                 vrf_submissions[candidate] = submission
 
         # Verify each candidate’s submission
@@ -129,8 +128,6 @@ class Blockchain:
             pubkey_raw = base64.b64decode(sub["public_key"])
             signature_raw = base64.b64decode(sub["signature"])
             output_hash = sub["output_hash"]
-
-            # Recreate verifying key
             try:
                 vk = ecdsa.VerifyingKey.from_string(pubkey_raw, curve=ecdsa.SECP256k1)
                 # Verify the signature

@@ -9,6 +9,8 @@ from blockchain import Blockchain
 from network import run_server, send_message, broadcast_election
 from GUI import BlockchainGUI
 
+debug = True
+
 def periodic_sync(blockchain):
     import time
     while True:
@@ -41,6 +43,29 @@ def election_scheduler(blockchain):
         time.sleep(time_to_next_election)
         from network import broadcast_election
         broadcast_election(blockchain)
+
+
+def leader_watchdog(blockchain):
+    import time
+    from network import send_message, broadcast_election
+
+    check_interval = 5  # how frequently we check the leader’s liveness (seconds)
+
+    while True:
+        time.sleep(check_interval)
+
+        if not blockchain.current_leader:
+            continue
+
+        leader_address = blockchain.current_leader
+        # Attempt to PING the leader
+        response = send_message(leader_address, {"type": "PING"}, expect_response=True)
+
+        # If no response or an error, trigger an immediate new election.
+        if not response or response.get("status") != "OK":
+            print(f"Leader {leader_address} is unresponsive, triggering a new election.")
+            time.sleep(1)  # Give some time for the network to stabilize
+            broadcast_election(blockchain)
 
 def run_tests():
     print("Running tests...")
@@ -112,6 +137,9 @@ def main():
 
     election_thread = threading.Thread(target=election_scheduler, args=(blockchain,), daemon=True)
     election_thread.start()
+
+    watchdog_thread = threading.Thread(target=leader_watchdog, args=(blockchain,), daemon=True)
+    watchdog_thread.start()
 
     sleep(1)
     root = tk.Tk()
