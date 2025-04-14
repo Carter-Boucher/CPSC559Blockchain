@@ -78,6 +78,39 @@ def handle_client_connection(conn, addr, blockchain, node_identifier):
                 else:
                     response = {"status": "Error", "message": "Missing transaction fields."}
 
+        elif msg_type == "LEADER_ELECTION_VRF":
+            # This node is being asked to submit its VRF data for leader election
+            seed = message.get("seed", "")
+            response = {
+                "status": "OK",
+                "submission": {}
+            }
+            if seed:
+                # 1) Sign seed with our private key
+                import base64, hashlib
+                signature_bytes = blockchain.ecdsa_private_key.sign(seed.encode('utf-8'))
+                signature_b64 = base64.b64encode(signature_bytes).decode('utf-8')
+                
+                # 2) Encode our public key
+                pubkey_b64 = base64.b64encode(blockchain.ecdsa_public_key.to_string()).decode('utf-8')
+
+                # 3) Compute output_hash = SHA-256(signature_bytes)
+                output_hash = hashlib.sha256(signature_bytes).hexdigest()
+
+                response["submission"] = {
+                    "public_key": pubkey_b64,
+                    "signature": signature_b64,
+                    "output_hash": output_hash,
+                    "candidate": blockchain.node_address
+                }
+            else:
+                response["status"] = "Error"
+                response["message"] = "No seed provided."
+            
+            # Return response
+            file.write((json.dumps(response) + "\n").encode("utf-8"))
+            file.flush()
+            return
 
 
         elif msg_type == "NEW_BLOCK":

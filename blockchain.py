@@ -4,8 +4,10 @@ from time import time
 import uuid
 import threading
 import random
+import ecdsa
+import base64
 
-debug = False
+debug = True
 
 def canonical_transaction(tx):
     """Return a canonical JSON representation of a transaction, ignoring the 'status' field."""
@@ -26,6 +28,9 @@ class Blockchain:
 
         # Set the election start time (when the first node starts)
         self.election_start_time = time()
+
+        self.ecdsa_private_key = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1)
+        self.ecdsa_public_key = self.ecdsa_private_key.get_verifying_key()
 
         genesis_block = self.create_genesis_block()
         self.chain.append(genesis_block)
@@ -52,18 +57,23 @@ class Blockchain:
         self.nodes.add(address)
 
     def elect_leader(self):
-        if debug:
-            print("Election started at node " + str(self.node_address))
+        """Elect a leader using a VRF-like approach (ECDSA sign + hash)."""
         from network import send_message
-        self.resolve_conflicts()
-        Qn = self.hash(self.last_block)
         
+        # 1) Sync with peers so we have the latest chain
+        self.resolve_conflicts()
+
+        # 2) The seed is the hash of our last block
+        Qn = self.hash(self.last_block)
+
+        # 3) Build the list of candidates
         candidate_addresses = list(self.nodes)
-        if hasattr(self, 'node_address') and self.node_address is not None:
+        if self.node_address is not None:
             candidate_addresses.append(self.node_address)
         else:
             candidate_addresses.append(str(self.node_id))
-        
+
+        # 4) Ping each candidate to ensure it's alive
         reachable_candidates = []
         for candidate in candidate_addresses:
             if candidate == self.node_address:
@@ -74,24 +84,87 @@ class Blockchain:
                     reachable_candidates.append(candidate)
                 else:
                     self.nodes.discard(candidate)
-                    if debug:
-                        print(f"Candidate {candidate} is unreachable, skipping.")
+
+        # 5) Everyone (including me) signs the seed and broadcasts
+        #    We'll store a local "vrf_submissions" dict keyed by candidate
+        vrf_submissions = {}
+
+        # Function to sign the seed with our private key, 
+        # then produce a base64-encoded signature
+        def sign_seed(seed: str):
+            signature_bytes = self.ecdsa_private_key.sign(seed.encode('utf-8'))
+            return base64.b64encode(signature_bytes).decode('utf-8')
         
-        if not reachable_candidates:
-            reachable_candidates = [self.node_address]
-        
-        best_candidate = None
-        best_value = None
+        print(f"Node {self.node_address} signing seed {Qn} with private key.")
+
+        # My own submission
+        my_signature_b64 = sign_seed(Qn)
+        my_pubkey_b64 = base64.b64encode(self.ecdsa_public_key.to_string()).decode('utf-8')
+        my_output_hash = hashlib.sha256(base64.b64decode(my_signature_b64)).hexdigest()
+
+        vrf_submissions[self.node_address] = {
+            "public_key": my_pubkey_b64,
+            "signature": my_signature_b64,
+            "output_hash": my_output_hash,
+            "candidate": self.node_address
+        }
+
+        # 6) Ask each reachable candidate for their VRF submission
         for candidate in reachable_candidates:
-            vrf_output = hashlib.sha256((candidate + Qn).encode()).hexdigest()
-            candidate_value = int(vrf_output, 16)
-            if best_value is None or candidate_value < best_value:
-                best_value = candidate_value
-                best_candidate = candidate
-        
+            if candidate == self.node_address:
+                continue
+            # Send a request for VRF data
+            response = send_message(candidate, {
+                "type": "LEADER_ELECTION_VRF",
+                "seed": Qn  # so they know what to sign
+            }, expect_response=True)
+            if response and response.get("status") == "OK" and "submission" in response:
+                submission = response["submission"]
+                # We'll verify it below
+                vrf_submissions[candidate] = submission
+
+        # 7) Verify each candidate’s submission
+        valid_candidates = []
+        for cand, sub in vrf_submissions.items():
+            pubkey_raw = base64.b64decode(sub["public_key"])
+            signature_raw = base64.b64decode(sub["signature"])
+            output_hash = sub["output_hash"]
+
+            # Recreate verifying key
+            try:
+                vk = ecdsa.VerifyingKey.from_string(pubkey_raw, curve=ecdsa.SECP256k1)
+                # Verify the signature
+                vk.verify(signature_raw, Qn.encode('utf-8'))
+
+                # Check the output_hash
+                check_hash = hashlib.sha256(signature_raw).hexdigest()
+                if check_hash != output_hash:
+                    if debug:
+                        print(f"Candidate {cand} gave invalid output_hash.")
+                    continue
+
+                # If we reach here, submission is valid
+                valid_candidates.append((cand, output_hash))
+            except Exception as e:
+                if debug:
+                    print(f"Candidate {cand} signature verification failed: {e}")
+                continue
+
+        if not valid_candidates:
+            # If no valid submissions, fallback to "None"
+            self.current_leader = None
+            if debug:
+                print("No valid leader submissions found!")
+            return self.current_leader
+
+        # 8) Pick the smallest output_hash
+        valid_candidates.sort(key=lambda x: x[1])  # sort by output_hash
+        best_candidate, best_hash = valid_candidates[0]
+
         self.current_leader = best_candidate
         if debug:
-            print(f"New leader elected: {best_candidate} (VRF value: {best_value})")
+            print(f"New leader elected: {best_candidate} (lowest VRF hash: {best_hash})")
+
         return best_candidate
 
     def valid_chain(self, chain):
