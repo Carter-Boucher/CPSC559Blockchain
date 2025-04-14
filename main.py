@@ -82,10 +82,22 @@ def main():
                 except Exception as e:
                     logging.error(f"Error registering with peer {peer}: {e}")
 
+    # Sync chain with peers
     blockchain.sync_chain()
 
-    if blockchain.current_leader is None:
-        from network import broadcast_election
+    # Ask each peer if they already have a leader
+    existing_leader = None
+    for peer in blockchain.nodes:
+        resp = send_message(peer, {"type": "GET_LEADER"}, expect_response=True)
+        if resp and resp.get("type") == "LEADER" and resp.get("leader") is not None:
+            existing_leader = resp["leader"]
+            logging.info(f"Discovered existing leader {existing_leader} from {peer}")
+            break
+
+    # If we found one, adopt it; otherwise start a new election
+    if existing_leader:
+        blockchain.current_leader = existing_leader
+    else:
         broadcast_election(blockchain)
 
     server_thread = threading.Thread(

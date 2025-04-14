@@ -78,6 +78,10 @@ def handle_client_connection(conn, addr, blockchain, node_identifier):
                 else:
                     response = {"status": "Error", "message": "Missing transaction fields."}
 
+        elif msg_type == "GET_LEADER":
+            # Return whoever this node currently believes is leader (or None)
+            response = {"type": "LEADER", "leader": blockchain.current_leader}
+
         elif msg_type == "LEADER_ELECTION_VRF":
             # This node is being asked to submit its VRF data for leader election
             seed = message.get("seed", "")
