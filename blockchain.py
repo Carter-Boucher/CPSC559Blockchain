@@ -7,7 +7,7 @@ import random
 import ecdsa
 import base64
 
-debug = True
+debug = False
 
 def canonical_transaction(tx):
     """Return a canonical JSON representation of a transaction, ignoring the 'status' field."""
