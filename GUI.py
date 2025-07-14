@@ -268,6 +268,12 @@ class BlockchainGUI:
                     self.refresh_pending_transactions()
                 else:
                     self.log(f"No pending transactions received from {address}.")
+                leader_resp = send_message(address, {"type": "GET_LEADER"}, expect_response=True)
+                if leader_resp and leader_resp.get("type") == "LEADER" and leader_resp.get("leader"):
+                    self.blockchain.current_leader = leader_resp["leader"]
+                    self.log(f"Adopted existing leader {leader_resp['leader']} from {address}")
+                    # force GUI update of leader label
+                    self.leader_var.set(f"Leader: {self.blockchain.current_leader}")
                 self.refresh_nodes()
             except ValueError as e:
                 messagebox.showerror("Error", str(e))

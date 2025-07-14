@@ -38,3 +38,7 @@ The system uses TCP sockets for node-to-node communication. Nodes exchange JSON-
 - Consensus and Conflict Resolution:
 If a node discovers a longer valid chain from its peers, it will replace its local chain to maintain consistency with the majority of the network.
 
+### Usage
+python main.py --host [ip] --port [port] --peers [peers]
+- we used tailscale to give each node a digital IP and it handles all the port forwarding and dealing with any firewalls.
+- in startnodes.bat there are 5 nodes that can be run locally to test the code.
